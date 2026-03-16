@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# ============================================================================
+# EVOLUTION CLI — The unified entry point
+# ============================================================================
+# A single command to interact with the entire Evolution engine.
+#
+# Usage:
+#   ./engine/evolve init "Build a REST API with auth"
+#   ./engine/evolve fitness          Run mechanical fitness check
+#   ./engine/evolve select           Pick next strategy (Thompson Sampling)
+#   ./engine/evolve cycle ...        Log a cycle
+#   ./engine/evolve checkpoint       Create a git checkpoint
+#   ./engine/evolve revert           Revert to last checkpoint
+#   ./engine/evolve status           Show dashboard
+#   ./engine/evolve analyze          Full analysis report
+#   ./engine/evolve plateau          Check for stagnation
+#   ./engine/evolve diversity        Check population diversity
+#   ./engine/evolve recommend        Get strategic recommendations
+#   ./engine/evolve skill-extract    Extract a new skill
+#   ./engine/evolve skill-list       List extracted skills
+#   ./engine/evolve skill-promote    Promote skill to .claude/skills/
+# ============================================================================
+
+set -euo pipefail
+
+ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+    # --- State Management ---
+    init)
+        python3 "$ENGINE_DIR/state.py" init "$@"
+        ;;
+    status)
+        python3 "$ENGINE_DIR/state.py" status
+        ;;
+    select)
+        python3 "$ENGINE_DIR/state.py" select
+        ;;
+    cycle)
+        python3 "$ENGINE_DIR/state.py" cycle "$@"
+        ;;
+    add-strategy)
+        python3 "$ENGINE_DIR/state.py" add-strategy "$@"
+        ;;
+    extinct)
+        python3 "$ENGINE_DIR/state.py" extinct "$@"
+        ;;
+    mutate)
+        python3 "$ENGINE_DIR/state.py" mutate "$@"
+        ;;
+    crystallize)
+        python3 "$ENGINE_DIR/state.py" crystallize
+        ;;
+
+    # --- Fitness ---
+    fitness)
+        bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
+        ;;
+
+    # --- Checkpoints ---
+    checkpoint)
+        bash "$ENGINE_DIR/checkpoint.sh" create "$@"
+        ;;
+    revert)
+        bash "$ENGINE_DIR/checkpoint.sh" revert
+        ;;
+    checkpoints)
+        bash "$ENGINE_DIR/checkpoint.sh" list
+        ;;
+    diff)
+        bash "$ENGINE_DIR/checkpoint.sh" diff
+        ;;
+
+    # --- Analysis ---
+    analyze)
+        python3 "$ENGINE_DIR/analyze.py" report
+        ;;
+    patterns)
+        python3 "$ENGINE_DIR/analyze.py" patterns
+        ;;
+    blind-spots)
+        python3 "$ENGINE_DIR/analyze.py" blind-spots
+        ;;
+    velocity)
+        python3 "$ENGINE_DIR/analyze.py" velocity
+        ;;
+    diversity)
+        python3 "$ENGINE_DIR/analyze.py" diversity
+        ;;
+    recommend)
+        python3 "$ENGINE_DIR/analyze.py" recommend
+        ;;
+    plateau)
+        python3 "$ENGINE_DIR/state.py" plateau
+        ;;
+
+    # --- SkillForge ---
+    skill-extract)
+        python3 "$ENGINE_DIR/skillforge.py" extract "$@"
+        ;;
+    skill-use)
+        python3 "$ENGINE_DIR/skillforge.py" use "$@"
+        ;;
+    skill-promote)
+        python3 "$ENGINE_DIR/skillforge.py" promote "$@"
+        ;;
+    skill-list)
+        python3 "$ENGINE_DIR/skillforge.py" list
+        ;;
+    skill-stats)
+        python3 "$ENGINE_DIR/skillforge.py" stats
+        ;;
+
+    # --- Help ---
+    help|--help|-h)
+        echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
+        echo ""
+        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate | crystallize"
+        echo "Fitness:     fitness"
+        echo "Checkpoints: checkpoint | revert | checkpoints | diff"
+        echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity | recommend | plateau"
+        echo "SkillForge:  skill-extract | skill-use | skill-promote | skill-list | skill-stats"
+        ;;
+    *)
+        echo "Unknown command: $CMD. Run './engine/evolve help' for usage." >&2
+        exit 1
+        ;;
+esac

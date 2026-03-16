@@ -24,7 +24,7 @@ Evolution: [works autonomously for hours]
   GOAL ACHIEVED.
 ```
 
-No hand-holding. No "what should I do next?" No waiting for permission. Evolution decomposes the goal, generates competing strategies, executes the best ones, verifies results, learns from outcomes, evolves its approach, and repeats — drawing from 40 years of AI research.
+No hand-holding. No "what should I do next?" No waiting for permission. Evolution decomposes the goal, generates competing strategies, executes the best ones, verifies results mechanically, learns from outcomes, evolves its approach, and repeats — powered by an executable engine that implements real Thompson Sampling, mechanical fitness computation, and autonomous skill extraction.
 
 ---
 
@@ -53,45 +53,54 @@ Evolution isn't a prompt hack. It's a principled synthesis of the most powerful 
 
 ## Architecture
 
-Evolution is built as a living biological system. Each subsystem has a clear responsibility:
+Evolution has two layers: the **Prompt Layer** (markdown instructions the AI reads) and the **Engine Layer** (executable code that computes fitness, selects strategies, and analyzes patterns).
+
+### Engine Layer (Executable Code)
+
+```
+engine/
+├── evolve           CLI entry point — unified command interface
+├── fitness.sh       Mechanical fitness computation (auto-detects project type)
+├── state.py         State machine — Thompson Sampling, cycle tracking, phase detection
+├── checkpoint.sh    Git-based checkpointing and rollback
+├── analyze.py       Metacognition — pattern mining, blind spots, velocity, diversity
+└── skillforge.py    Voyager-inspired autonomous skill extraction and promotion
+```
+
+### Prompt Layer (Knowledge System)
 
 ```
 evolution/
-├── cortex/          MEMORY — The agent's brain
-│   ├── episodic     Raw experiences (what happened)
-│   ├── semantic     Distilled principles (what's true)
-│   ├── procedural   Proven recipes (how to do things)
-│   └── working      Current consciousness (what's happening now)
+├── cortex/          MEMORY — Load on demand, not every cycle
+│   ├── working.md   Current state (load EVERY cycle)
+│   ├── episodic.md  Raw experiences (load every 5 cycles)
+│   ├── semantic.md  Distilled principles (load on milestone)
+│   └── procedural.md Proven recipes / skill library (load on milestone)
 │
-├── genome/          STRATEGY DNA — Competing approaches
-│   ├── population   Active strategies with fitness scores
-│   ├── graveyard    Extinct strategies (negative knowledge)
-│   ├── mutations    Genetic operation log
-│   └── hall-of-fame Elite strategies preserved forever
+├── genome/          STRATEGY DNA
+│   ├── population.md Active strategies (load when selecting)
+│   └── graveyard.md  Extinct strategies (load when stuck)
 │
-├── helix/           FITNESS — Natural selection engine
-│   ├── fitness      Multi-dimensional scoring rubric
-│   ├── rewards      Reinforcement signal history
-│   └── landscape    Map of explored solution space
+├── nucleus/         EXECUTION
+│   ├── goal.md      Goal tree (load every cycle)
+│   └── cycle.md     Cycle log — append-only (write every cycle)
 │
-├── nucleus/         EXECUTION — The autonomous loop
-│   ├── goal         Decomposed goal tree (north star)
-│   ├── cycle        Cycle state and history
-│   ├── queue        Prioritized action queue
-│   └── checkpoints  Reversibility safety net
+├── synapse/         METACOGNITION (load every 5 cycles)
+│   ├── reflections.md Post-action analysis
+│   ├── patterns.md    Meta-patterns
+│   └── blind-spots.md Known unknowns
 │
-├── synapse/         METACOGNITION — Learning about learning
-│   ├── reflections  Post-action self-analysis
-│   ├── patterns     Meta-patterns discovered
-│   ├── blind-spots  Known unknowns
-│   └── evolution-rate  Learning velocity tracking
+├── dendrite/        EXPLORATION (load when stuck)
+│   ├── hypotheses.md  Active hypotheses
+│   └── frontiers.md   Unexplored territory
 │
-└── dendrite/        EXPLORATION — Scientific method
-    ├── hypotheses   Active hypotheses being tested
-    ├── experiments  Structured experiment log
-    ├── frontiers    Edges of explored territory
-    └── info-gain    Highest-value questions to answer
+└── .state/          ENGINE STATE (JSON — managed by engine, not read directly)
+    ├── evolution.json   Full state machine
+    ├── checkpoints.jsonl Git checkpoint history
+    └── skill-registry.json Extracted skill registry
 ```
+
+**Key discipline**: The AI reads only `working.md` and `goal.md` every cycle. All other files are loaded on demand. The engine manages state in JSON, the markdown files are the human-readable knowledge base.
 
 ---
 
@@ -123,11 +132,13 @@ Every 5 cycles, the **Metacognition Engine** activates — analyzing patterns ac
 # Clone into your project
 git clone https://github.com/mcrochresearch/Evolution.git
 
-# Copy the skill files
+# Copy everything
 cp -r Evolution/.claude/skills/ your-project/.claude/skills/
-
-# Copy the runtime directory
 cp -r Evolution/evolution/ your-project/evolution/
+cp -r Evolution/engine/ your-project/engine/
+
+# Make engine executable
+chmod +x your-project/engine/evolve your-project/engine/*.sh
 ```
 
 Then in Claude Code:
@@ -138,11 +149,33 @@ Then in Claude Code:
 ### OpenClaw
 
 ```bash
-# Copy the openclaw workspace files
+# Copy workspace + engine + runtime
 cp -r Evolution/openclaw/* your-openclaw-workspace/
-
-# Copy the evolution runtime
 cp -r Evolution/evolution/ your-openclaw-workspace/evolution/
+cp -r Evolution/engine/ your-openclaw-workspace/engine/
+chmod +x your-openclaw-workspace/engine/evolve your-openclaw-workspace/engine/*.sh
+```
+
+---
+
+## Engine CLI
+
+The executable engine provides real computation — not prompt tricks:
+
+```bash
+./engine/evolve init "Build X"           # Initialize with real Thompson Sampling state
+./engine/evolve fitness                  # Auto-detect project, run tests/build/lint, return JSON
+./engine/evolve select                   # Thompson Sampling strategy selection (Beta distribution)
+./engine/evolve cycle S001 "action" 5 6 0.83 true  # Log cycle with mechanical scores
+./engine/evolve checkpoint "msg"         # Git-based checkpoint
+./engine/evolve revert                   # Clean rollback
+./engine/evolve analyze                  # Full metacognition report
+./engine/evolve plateau                  # Stagnation detection with recommendations
+./engine/evolve diversity                # Population health (Quality-Diversity)
+./engine/evolve velocity                 # Learning speed + estimated cycles remaining
+./engine/evolve recommend                # Phase-aware strategic recommendations
+./engine/evolve skill-extract "name" "desc" '["steps"]'  # Voyager-pattern skill creation
+./engine/evolve skill-promote SK001      # Graduate skill to .claude/skills/
 ```
 
 ---
@@ -161,16 +194,26 @@ cp -r Evolution/evolution/ your-openclaw-workspace/evolution/
 ## What Makes Evolution Different
 
 ### vs. Regular AI Coding Assistants
-Regular assistants wait for your next instruction. Evolution **figures out** the next instruction itself, executes it, verifies it, and keeps going.
+Regular assistants wait for your next instruction. Evolution **figures out** the next instruction itself, executes it, verifies it mechanically, and keeps going indefinitely.
 
 ### vs. Autoresearch (Karpathy)
-Autoresearch runs a fixed loop on ML training. Evolution generalizes this to **any goal**, adds **strategy evolution**, **persistent memory**, **metacognition**, and **hypothesis-driven exploration**.
+Autoresearch runs a fixed loop on one file with one metric. Evolution generalizes to **any goal** across **any codebase**, adds **competing strategy populations** with real Thompson Sampling, **persistent memory** that compounds across sessions, **metacognition** that detects stagnation and pivots, **hypothesis-driven exploration**, and a **SkillForge** that creates new reusable skills autonomously.
 
-### vs. Simple Loops / Retries
-Simple retry loops repeat the same approach. Evolution **learns from failures**, **mutates strategies**, **maintains diversity**, and **gets smarter over time**. It does not repeat mistakes.
+### vs. MiroFish (Swarm Intelligence)
+MiroFish simulates thousands of agents to predict outcomes. Evolution **is** the agent — it doesn't simulate intelligence, it **implements** it. Where MiroFish predicts what might happen, Evolution **makes things happen** through autonomous execution. Evolution incorporates MiroFish's swarm concepts through stigmergic cross-session learning (pheromone trails in procedural memory).
 
-### vs. Static Skills
-Static skills are frozen playbooks. Evolution's skill files are **living documents** that grow with experience. The agent at Cycle 50 has fundamentally different knowledge than at Cycle 1.
+### vs. Voyager / Claudeception (Skill Libraries)
+Voyager and Claudeception create skill libraries from experience. Evolution **includes** this pattern (SkillForge) but goes further: skills don't just accumulate, they **compete and evolve**. Strategies mutate, crossover, and face selection pressure. The skill library itself is a living population under evolutionary pressure.
+
+### vs. Reflexion / Self-Evolving Agent
+Reflexion adds verbal self-reflection. Self-Evolving Agent adds PDCA loops. Evolution **combines both** with real executable computation: mechanical fitness scoring, Thompson Sampling with actual Beta distributions, phase-aware recommendations from the analysis engine, and diversity monitoring to prevent population collapse.
+
+### vs. Everything Else
+Most AI agent frameworks are either:
+1. **Just prompts** — clever instructions but no real computation
+2. **Just code** — automation scripts with no learning
+
+Evolution is **both**: executable engine code that computes real statistics AND prompt instructions that guide intelligent behavior. The engine ensures rigor. The prompts ensure creativity. Together they create something neither can achieve alone.
 
 ---
 
@@ -205,4 +248,4 @@ MIT
 
 ---
 
-*Built by studying the giants: Karpathy's autoresearch, OpenClaw's workspace system, Anthropic's official skill patterns, and 40 years of AI/ML research. Evolution stands on their shoulders.*
+*Built by studying the giants: Karpathy's autoresearch, MiroFish's swarm intelligence, Voyager's skill libraries, Claudeception's autonomous learning, OpenClaw's workspace system, Anthropic's official skill patterns, the Self-Evolving Agent's PDCA loops, ARIS's cross-model review, and 40 years of AI/ML research — from Holland's genetic algorithms to Shinn's Reflexion. Evolution stands on all their shoulders and reaches higher.*
