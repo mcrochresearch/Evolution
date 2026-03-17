@@ -23,6 +23,7 @@ Usage:
     python engine/state.py import                Load state from stdin
 """
 
+import fcntl
 import json
 import os
 import sys
@@ -32,8 +33,9 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-STATE_DIR = Path("evolution/.state")
+STATE_DIR = Path(os.environ.get("EVOLUTION_STATE_DIR", "evolution/.state"))
 STATE_FILE = STATE_DIR / "evolution.json"
+LOCK_FILE = STATE_DIR / ".lock"
 
 # --- Named Constants ---
 # Phase detection thresholds (documented rationale)
@@ -42,26 +44,25 @@ PLATEAU_WINDOW = 5                  # Cycles to check for stagnation
 PLATEAU_VARIANCE = 0.02             # Max fitness variance to consider plateau
 BREAKTHROUGH_JUMP = 0.15            # Min single-cycle jump for breakthrough
 MATURITY_THRESHOLD = 0.85           # Fitness above this = near completion
-EXPLORATION_DECAY = 0.95            # Per-cycle decay multiplier for exploration rate
-EXPLORATION_FLOOR = 0.10            # Never go below this exploration rate
-DEFAULT_EXPLORATION = 0.30          # Starting exploration rate
 MAX_POPULATION = 8                  # Auto-cull when population exceeds this
 SURPRISE_THRESHOLD = 0.10           # Delta above this is "surprising"
+MIN_PROVEN_SUCCESSES = 5            # Successes needed before PROVEN status
+MAX_HISTORY = 500                   # Rolling window for fitness_history, cycles, episodes
 
 
 def default_state(goal: str) -> dict:
     """Create a fresh evolution state."""
     return {
-        "version": 2,
+        "version": 3,
         "goal": goal,
         "created": now(),
         "cycle": 0,
         "phase": "GENESIS",
         "fitness": 0.0,
         "fitness_history": [],
-        "exploration_rate": DEFAULT_EXPLORATION,
         "consecutive_failures": 0,
         "consecutive_successes": 0,
+        "next_strategy_id": 1,
         "strategies": [],
         "graveyard": [],
         "hall_of_fame": [],
@@ -77,6 +78,20 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _acquire_lock():
+    """Acquire an exclusive file lock for state operations."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    return lock_fd
+
+
+def _release_lock(lock_fd):
+    """Release the file lock."""
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    lock_fd.close()
+
+
 def load_state() -> dict:
     """Load state from JSON file."""
     if not STATE_FILE.exists():
@@ -87,21 +102,28 @@ def load_state() -> dict:
 
 
 def save_state(state: dict):
-    """Atomically save state to JSON file (write-to-temp-then-rename)."""
+    """Atomically save state to JSON file (write-to-temp-then-rename) with file locking."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    # Write to temp file first, then rename for atomicity
-    fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp")
+    lock_fd = _acquire_lock()
     try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(state, f, indent=2)
-        os.replace(tmp_path, STATE_FILE)
-    except Exception:
-        # Clean up temp file on failure
+        # Trim unbounded arrays to prevent state bloat
+        for key in ("fitness_history", "cycles", "episodes"):
+            if key in state and len(state[key]) > MAX_HISTORY:
+                state[key] = state[key][-MAX_HISTORY:]
+        # Write to temp file first, then rename for atomicity
+        fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp")
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f, indent=2)
+            os.replace(tmp_path, STATE_FILE)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+    finally:
+        _release_lock(lock_fd)
 
 
 # ============================================================================
@@ -170,10 +192,17 @@ def cmd_init(goal: str):
     print(json.dumps({"status": "initialized", "goal": goal}))
 
 
+def _next_sid(state: dict) -> str:
+    """Generate a monotonically increasing strategy ID."""
+    sid_num = state.get("next_strategy_id", len(state["strategies"]) + len(state["graveyard"]) + 1)
+    state["next_strategy_id"] = sid_num + 1
+    return f"S{sid_num:03d}"
+
+
 def cmd_add_strategy(name: str, approach: str, hypothesis: str):
     """Add a new strategy to the population."""
     state = load_state()
-    sid = f"S{len(state['strategies']) + len(state['graveyard']) + 1:03d}"
+    sid = _next_sid(state)
     strategy = {
         "id": sid,
         "name": name,
@@ -193,46 +222,38 @@ def cmd_add_strategy(name: str, approach: str, hypothesis: str):
 
 
 def cmd_select():
-    """Select next strategy using Thompson Sampling."""
+    """Select next strategy using pure Thompson Sampling.
+
+    Thompson Sampling naturally balances exploration vs exploitation through
+    posterior sampling — no epsilon-greedy needed. Strategies with few attempts
+    have wide Beta distributions (explore), while proven strategies cluster
+    near their true success rate (exploit).
+    """
     state = load_state()
     strategies = [s for s in state["strategies"] if s["status"] != "EXTINCT"]
 
     if not strategies:
         print(json.dumps({"error": "No strategies available. Add strategies first."}))
-        return
+        sys.exit(1)
 
-    exploration_rate = state["exploration_rate"]
-
-    # Thompson Sampling: for each strategy, sample from Beta distribution
-    # based on successes and failures. Beta(alpha, beta) naturally balances
-    # exploration (uncertain strategies get wider distributions) vs
-    # exploitation (proven strategies cluster near their true success rate).
+    # Thompson Sampling: sample from Beta(successes+1, failures+1) for each strategy
     scores = []
     for s in strategies:
-        alpha = s["successes"] + 1   # +1 prior (optimistic)
-        beta_param = (s["attempts"] - s["successes"]) + 1  # +1 prior
+        alpha = s["successes"] + 1   # Beta(1,1) = uniform prior
+        beta_param = (s["attempts"] - s["successes"]) + 1
         sample = random.betavariate(alpha, beta_param)
         scores.append((sample, s))
 
     scores.sort(key=lambda x: x[0], reverse=True)
-
-    # With exploration_rate probability, pick randomly instead.
-    # This provides an additional exploration mechanism on top of
-    # Thompson Sampling's natural exploration.
-    if random.random() < exploration_rate:
-        selected = random.choice(strategies)
-        method = "exploration"
-    else:
-        selected = scores[0][1]
-        method = "exploitation"
+    selected = scores[0][1]
 
     print(json.dumps({
         "selected": selected["id"],
         "name": selected["name"],
-        "method": method,
+        "method": "thompson_sampling",
+        "sample_score": round(scores[0][0], 4),
         "fitness": selected["fitness"],
         "attempts": selected["attempts"],
-        "exploration_rate": round(exploration_rate, 3),
         "population_size": len(strategies),
     }))
 
@@ -261,8 +282,11 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
             s["attempts"] += 1
             if kept:
                 s["successes"] += 1
-                s["fitness"] = max(s["fitness"], fitness)
-            s["status"] = "PROVEN" if s["successes"] >= 2 else s["status"]
+            # Track running average fitness (not ratcheted max)
+            prev_avg = s["fitness"]
+            s["fitness"] = round(prev_avg + (fitness - prev_avg) / s["attempts"], 4)
+            # PROVEN requires statistically meaningful evidence
+            s["status"] = "PROVEN" if s["successes"] >= MIN_PROVEN_SUCCESSES else s["status"]
             break
 
     # Track consecutive outcomes
@@ -272,16 +296,6 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
     else:
         state["consecutive_failures"] += 1
         state["consecutive_successes"] = 0
-
-    # Decay exploration rate (multiplicative decay with floor)
-    state["exploration_rate"] = max(
-        EXPLORATION_FLOOR,
-        state["exploration_rate"] * EXPLORATION_DECAY
-    )
-
-    # Boost exploration on consecutive failures (adaptive)
-    if state["consecutive_failures"] >= 3:
-        state["exploration_rate"] = min(0.50, state["exploration_rate"] + 0.05)
 
     # Detect phase transitions
     state["phase"] = detect_phase(state)
@@ -410,6 +424,7 @@ def cmd_extinct(strategy_id: str, reason: str):
             print(json.dumps({"status": "extinct", "strategy": strategy_id, "reason": reason}))
             return
     print(json.dumps({"error": f"Strategy {strategy_id} not found in active population"}))
+    sys.exit(1)
 
 
 def cmd_mutate(parent_id: str, name: str, approach: str):
@@ -422,9 +437,9 @@ def cmd_mutate(parent_id: str, name: str, approach: str):
             break
     if not parent:
         print(json.dumps({"error": f"Strategy {parent_id} not found"}))
-        return
+        sys.exit(1)
 
-    sid = f"S{len(state['strategies']) + len(state['graveyard']) + 1:03d}"
+    sid = _next_sid(state)
     child = {
         "id": sid,
         "name": name,
@@ -456,9 +471,9 @@ def cmd_crossover(id1: str, id2: str, name: str):
     if not parent1 or not parent2:
         missing = id1 if not parent1 else id2
         print(json.dumps({"error": f"Strategy {missing} not found"}))
-        return
+        sys.exit(1)
 
-    sid = f"S{len(state['strategies']) + len(state['graveyard']) + 1:03d}"
+    sid = _next_sid(state)
     child = {
         "id": sid,
         "name": name,
@@ -531,16 +546,28 @@ def cmd_resurrect(strategy_id: str):
             print(json.dumps({"status": "resurrected", "strategy": strategy_id}))
             return
     print(json.dumps({"error": f"Strategy {strategy_id} not found in graveyard"}))
+    sys.exit(1)
+
+
+def _wilson_lower(successes: int, total: int, z: float = 1.96) -> float:
+    """Wilson score lower bound — conservative success rate estimate."""
+    if total == 0:
+        return 0.0
+    phat = successes / total
+    denom = 1 + z * z / total
+    center = (phat + z * z / (2 * total)) / denom
+    spread = z * math.sqrt((phat * (1 - phat) + z * z / (4 * total)) / total) / denom
+    return max(0, round(center - spread, 4))
 
 
 def cmd_crystallize():
-    """Crystallize learnings: extract causal principles from episodes."""
+    """Extract correlational patterns from episodes into reusable principles."""
     state = load_state()
     episodes = state["episodes"]
     cycles = state["cycles"]
 
-    if len(episodes) < 5:
-        print(json.dumps({"status": "not_enough_data", "episodes": len(episodes)}))
+    if len(episodes) < 10:
+        print(json.dumps({"status": "not_enough_data", "episodes": len(episodes), "need": 10}))
         return
 
     successes = [e for e in episodes if e["outcome"] == "KEPT"]
@@ -551,14 +578,14 @@ def cmd_crystallize():
     failure_words = {}
     for e in successes:
         for word in e["action"].lower().split():
-            if len(word) > 3:  # Skip short words
+            if len(word) > 3:
                 success_words[word] = success_words.get(word, 0) + 1
     for e in failures:
         for word in e["action"].lower().split():
             if len(word) > 3:
                 failure_words[word] = failure_words.get(word, 0) + 1
 
-    # Find strategy-outcome correlations (causal analysis)
+    # Find strategy-outcome correlations
     strategy_outcomes = {}
     for c in cycles:
         sid = c["strategy"]
@@ -576,29 +603,36 @@ def cmd_crystallize():
         total = data["kept"] + data["reverted"]
         data["success_rate"] = round(data["kept"] / total, 2) if total else 0
 
-    # Extract principles from high-confidence patterns
+    # Extract principles — deduplicate by source, use Wilson score for confidence
+    existing_sources = {p["source"] for p in state["principles"]}
     new_principles = []
+    base_rate = len(successes) / max(len(episodes), 1)
+
     for sid, data in strategy_outcomes.items():
+        if sid in existing_sources:
+            continue
         total = data["kept"] + data["reverted"]
-        if total >= 3 and data["success_rate"] >= 0.7:
-            strat = next((s for s in state["strategies"] if s["id"] == sid), None)
-            if strat:
-                new_principles.append({
-                    "source": sid,
-                    "principle": f"Strategy '{strat['name']}' works reliably ({data['success_rate']*100:.0f}% over {total} attempts)",
-                    "confidence": round(min(0.95, 0.5 + total * 0.05), 2),
-                    "extracted_at": now(),
-                })
-        elif total >= 3 and data["success_rate"] <= 0.3:
-            strat = next((s for s in state["strategies"] if s["id"] == sid),
-                         next((s for s in state["graveyard"] if s["id"] == sid), None))
-            if strat:
-                new_principles.append({
-                    "source": sid,
-                    "principle": f"Strategy '{strat['name']}' is unreliable ({data['success_rate']*100:.0f}% over {total} attempts) — avoid",
-                    "confidence": round(min(0.95, 0.5 + total * 0.05), 2),
-                    "extracted_at": now(),
-                })
+        if total < 5:  # Need meaningful sample size
+            continue
+        wilson = _wilson_lower(data["kept"], total)
+        all_strats = state["strategies"] + state["graveyard"]
+        strat = next((s for s in all_strats if s["id"] == sid), None)
+        if not strat:
+            continue
+        if wilson > base_rate + 0.1:
+            new_principles.append({
+                "source": sid,
+                "principle": f"Strategy '{strat['name']}' correlates with success ({data['success_rate']*100:.0f}% over {total}, Wilson lower={wilson})",
+                "wilson_lower": wilson,
+                "extracted_at": now(),
+            })
+        elif wilson < 0.3 and data["success_rate"] <= 0.3:
+            new_principles.append({
+                "source": sid,
+                "principle": f"Strategy '{strat['name']}' correlates with failure ({data['success_rate']*100:.0f}% over {total}, Wilson lower={wilson}) — avoid",
+                "wilson_lower": wilson,
+                "extracted_at": now(),
+            })
 
     state["principles"].extend(new_principles)
     save_state(state)
@@ -608,7 +642,7 @@ def cmd_crystallize():
         "total_episodes": len(episodes),
         "successes": len(successes),
         "failures": len(failures),
-        "success_rate": round(len(successes) / max(len(episodes), 1), 2),
+        "base_success_rate": round(base_rate, 2),
         "strategy_correlations": strategy_outcomes,
         "new_principles": new_principles,
         "total_principles": len(state["principles"]),
@@ -654,7 +688,6 @@ def cmd_status():
         "best_strategy": {
             "id": best["id"], "name": best["name"], "fitness": best["fitness"]
         } if best else None,
-        "exploration_rate": round(state["exploration_rate"], 3),
         "episodes": len(state["episodes"]),
         "principles": len(state["principles"]),
         "consecutive_failures": state["consecutive_failures"],
@@ -682,11 +715,14 @@ def cmd_export():
 
 
 def cmd_import():
-    """Import state from stdin."""
+    """Import state from stdin with schema validation."""
+    REQUIRED_KEYS = {"goal", "cycle", "strategies", "graveyard", "fitness_history",
+                     "cycles", "episodes", "fitness", "phase"}
     try:
         data = json.load(sys.stdin)
-        if "goal" not in data or "cycle" not in data:
-            print(json.dumps({"error": "Invalid state: missing required fields"}))
+        missing = REQUIRED_KEYS - set(data.keys())
+        if missing:
+            print(json.dumps({"error": f"Invalid state: missing required fields: {sorted(missing)}"}))
             sys.exit(1)
         save_state(data)
         print(json.dumps({"status": "imported", "goal": data["goal"], "cycle": data["cycle"]}))

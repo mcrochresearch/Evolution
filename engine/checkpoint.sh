@@ -35,9 +35,16 @@ case "$CMD" in
         # Also stash any uncommitted changes so we can restore them
         STASH_HASH=$(git stash create 2>/dev/null || echo "")
 
-        # Store checkpoint info
+        # Store checkpoint info (use python for safe JSON escaping)
         mkdir -p "$STATE_DIR"
-        echo "{\"tag\":\"$TAG\",\"head\":\"$HASH\",\"stash\":\"${STASH_HASH:-none}\",\"message\":\"$MESSAGE\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$CHECKPOINT_FILE"
+        python3 -c "
+import json, sys
+print(json.dumps({
+    'tag': sys.argv[1], 'head': sys.argv[2],
+    'stash': sys.argv[3], 'message': sys.argv[4],
+    'timestamp': sys.argv[5]
+}))
+" "$TAG" "$HASH" "${STASH_HASH:-none}" "$MESSAGE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$CHECKPOINT_FILE"
 
         echo "{\"status\":\"created\",\"tag\":\"$TAG\",\"head\":\"$HASH\"}"
         ;;
@@ -75,17 +82,17 @@ case "$CMD" in
             exit 0
         fi
 
-        # Build proper JSON array
+        # Build proper JSON array (using process substitution to avoid subshell scoping)
         echo -n '{"checkpoints":['
         FIRST=true
-        tail -10 "$CHECKPOINT_FILE" | while IFS= read -r line; do
+        while IFS= read -r line; do
             if [[ "$FIRST" == "true" ]]; then
                 FIRST=false
             else
                 echo -n ","
             fi
             echo -n "$line"
-        done
+        done < <(tail -10 "$CHECKPOINT_FILE")
         echo ']}'
         ;;
 

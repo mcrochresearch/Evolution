@@ -38,9 +38,12 @@ DETECTED_TYPE="unknown"
 
 # --- Helpers ---
 add_result() {
-    local name="$1" passed="$2" weight="$3" detail="$4"
-    local score=0
-    [[ "$passed" == "true" ]] && score=1
+    local name="$1" passed="$2" weight="$3" detail="$4" score="${5:-}"
+    # Use continuous score if provided, otherwise binary
+    if [[ -z "$score" ]]; then
+        score=0
+        [[ "$passed" == "true" ]] && score=1
+    fi
     RESULTS+=("{\"name\":\"$name\",\"passed\":$passed,\"score\":$score,\"weight\":$weight,\"detail\":\"$detail\"}")
     TOTAL_SCORE=$(echo "$TOTAL_SCORE + $score * $weight" | bc -l 2>/dev/null || echo "$TOTAL_SCORE")
     TOTAL_WEIGHT=$(echo "$TOTAL_WEIGHT + $weight" | bc -l 2>/dev/null || echo "$TOTAL_WEIGHT")
@@ -129,7 +132,10 @@ if [[ -f "package.json" ]]; then
             local_framework="jest"
             grep -q "vitest" package.json 2>/dev/null && local_framework="vitest"
             parse_test_counts "$TEST_OUTPUT" "$local_framework"
-            add_result "tests" "$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL"
+            local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+            # Continuous scoring: tests_passing/tests_total instead of binary
+            local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+            add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     else
         add_error "No 'test' script found in package.json"
@@ -168,7 +174,9 @@ elif [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]] || [[ -f "requirements.txt
             add_result "tests" "false" "0.40" "TIMEOUT"
         else
             parse_test_counts "$TEST_OUTPUT" "pytest"
-            add_result "tests" "$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL"
+            local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+            local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+            add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     elif [[ -d "tests" ]] || [[ -d "test" ]]; then
         add_error "Test directory found but pytest not installed"
@@ -196,7 +204,9 @@ elif [[ -f "Cargo.toml" ]]; then
         add_result "tests" "false" "0.40" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "cargo"
-        add_result "tests" "$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL"
+        local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+        local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+        add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
     run_with_timeout "cargo build" >/dev/null 2>&1 && BUILD_OK=true || BUILD_OK=false
@@ -217,7 +227,9 @@ elif [[ -f "go.mod" ]]; then
         add_result "tests" "false" "0.40" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "go"
-        add_result "tests" "$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL"
+        local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+        local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+        add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
     run_with_timeout "go build ./..." >/dev/null 2>&1 && BUILD_OK=true || BUILD_OK=false

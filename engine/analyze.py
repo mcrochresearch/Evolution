@@ -19,7 +19,7 @@ Usage:
     python engine/analyze.py diversity     Check strategy diversity
     python engine/analyze.py recommend     Get strategic recommendations
     python engine/analyze.py report        Full analysis report
-    python engine/analyze.py correlations  Strategy-outcome causal analysis
+    python engine/analyze.py correlations  Strategy-outcome correlational analysis
 """
 
 import json
@@ -62,7 +62,7 @@ def wilson_score(successes: int, total: int, z: float = 1.96) -> tuple:
 
 
 def effect_size(group1: list, group2: list) -> float:
-    """Cohen's d effect size between two groups.
+    """Cohen's d effect size between two groups using Bessel-corrected pooled SD.
 
     Returns magnitude of difference in standard deviation units:
     - < 0.2: negligible
@@ -72,10 +72,15 @@ def effect_size(group1: list, group2: list) -> float:
     """
     if not group1 or not group2:
         return 0.0
-    mean1, mean2 = sum(group1) / len(group1), sum(group2) / len(group2)
-    var1 = sum((x - mean1) ** 2 for x in group1) / max(len(group1), 1)
-    var2 = sum((x - mean2) ** 2 for x in group2) / max(len(group2), 1)
-    pooled_sd = math.sqrt((var1 + var2) / 2) if (var1 + var2) > 0 else 1
+    n1, n2 = len(group1), len(group2)
+    mean1, mean2 = sum(group1) / n1, sum(group2) / n2
+    # Bessel-corrected sample variance (divide by n-1)
+    var1 = sum((x - mean1) ** 2 for x in group1) / max(n1 - 1, 1)
+    var2 = sum((x - mean2) ** 2 for x in group2) / max(n2 - 1, 1)
+    # Pooled SD weighted by degrees of freedom
+    pooled_sd = math.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / max(n1 + n2 - 2, 1))
+    if pooled_sd == 0:
+        return 0.0
     return round((mean1 - mean2) / pooled_sd, 3)
 
 
@@ -178,7 +183,7 @@ def cmd_patterns():
 
 
 def cmd_correlations():
-    """Deep causal analysis: which strategies work in which contexts?"""
+    """Correlational analysis: which strategies associate with success in which contexts?"""
     state = load_state()
     cycles = state["cycles"]
 

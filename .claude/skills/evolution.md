@@ -38,7 +38,7 @@ Evolution has an executable engine. Use these commands via Bash:
 ./engine/evolve analyze                        # Full report
 ./engine/evolve plateau                        # Stagnation detection
 ./engine/evolve recommend                      # Strategic recommendations
-./engine/evolve correlations                   # Causal analysis
+./engine/evolve correlations                   # Correlational analysis
 ./engine/evolve velocity                       # Learning speed
 ./engine/evolve diversity                      # Population health
 ./engine/evolve crystallize                    # Extract principles from episodes
@@ -90,7 +90,7 @@ REPEAT
 ```
 
 ### SELECT
-Run `./engine/evolve select` — Thompson Sampling (Beta distribution) balances exploration vs exploitation. Returns JSON with selected strategy and method.
+Run `./engine/evolve select` — pure Thompson Sampling (Beta distribution) balances exploration vs exploitation automatically through posterior sampling. No epsilon-greedy needed.
 
 ### EXECUTE
 - **One change per cycle.** Never bundle unrelated changes.
@@ -99,7 +99,7 @@ Run `./engine/evolve select` — Thompson Sampling (Beta distribution) balances 
 
 ### VERIFY — THIS IS CRITICAL
 Run `./engine/evolve fitness` — auto-detects project type, runs all checks with timeout protection. Returns JSON:
-- `fitness`: 0.0-1.0 weighted score
+- `fitness`: 0.0-1.0 weighted score (tests use continuous `passing/total`, not binary)
 - `tests_passing` / `tests_total`: actual test counts
 - `build`, `lint`, `types`: boolean pass/fail
 - `errors`: any issues encountered during verification
@@ -111,7 +111,7 @@ If no tests exist, your FIRST action is to create them. You cannot evolve withou
 ### SCORE
 Log: `./engine/evolve cycle "SXXX" "what was done" <tests_passing> <tests_total> <fitness> <true|false>`
 
-The engine validates all inputs (fitness 0.0-1.0, tests_passing <= tests_total), tracks history, detects phase transitions, and auto-boosts exploration after consecutive failures.
+The engine validates all inputs (fitness 0.0-1.0, tests_passing <= tests_total), tracks history, and detects phase transitions.
 
 ### KEEP or REVERT
 - Tests improved or stable + progress toward goal → **KEEP**
@@ -122,12 +122,12 @@ Append to `evolution/synapse/reflections.md` — keep it SHORT:
 ```
 ## Cycle N
 What: [one sentence — what was done]
-Why: [one sentence — causal analysis of outcome]
+Why: [one sentence — what caused this outcome]
 Next: [one sentence — what to try next based on this]
 ```
 
 ### EVOLVE
-- **Success** → Reinforce: record pattern in `evolution/cortex/procedural.md` if worked 3+ times
+- **Success** → Reinforce: record pattern in `evolution/cortex/procedural.md` if worked 5+ times
 - **Failure** → Mutate: `./engine/evolve mutate "SXXX" "variation name" "new approach"`
 - **3+ failures** → Extinct: `./engine/evolve extinct "SXXX" "reason"`, try new approach
 - **2 near-misses** → Crossover: `./engine/evolve crossover "S001" "S002" "combined"`
@@ -215,7 +215,7 @@ A change that improves VERIFY but breaks GUARD → REWORK (max 2 attempts, then 
 1. Re-read ALL in-scope files from scratch
 2. Re-read goal tree — is decomposition right?
 3. Review full cycle log — what patterns emerge?
-4. `./engine/evolve correlations` — what actually works?
+4. `./engine/evolve correlations` — what strategies correlate with success?
 5. `./engine/evolve resurrect "SXXX"` — try a graveyard strategy
 6. Try the OPPOSITE of everything you've been doing
 7. Search externally — web, docs, similar projects
