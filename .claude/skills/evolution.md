@@ -113,14 +113,6 @@ Evolution has an executable engine. Use these commands via Bash:
 ./engine/evolve outcome-retro --days 7                    # Weekly retrospective
 ./engine/evolve outcome-lessons                           # Extract statistically-backed lessons
 
-# Swarm Intelligence (Monte Carlo simulation + multi-persona consensus)
-./engine/evolve swarm-select                              # Swarm-consensus strategy selection (replaces Thompson Sampling)
-./engine/evolve swarm-simulate [n_sims] [horizon]         # Monte Carlo simulate all strategies (default: 500 sims, 10 cycles)
-./engine/evolve swarm-predict "S001" [steps]              # Predict trajectory for one strategy
-./engine/evolve swarm-landscape                           # Map explored fitness space + coverage gaps
-./engine/evolve swarm-personas                            # Show swarm personas and their utility weights
-./engine/evolve swarm-history [N]                         # Recent swarm decisions
-
 # State management
 ./engine/evolve reset --force                  # Clear all state (requires --force)
 ./engine/evolve export > backup.json           # Backup
@@ -172,33 +164,17 @@ UPDATE   → Write working.md + cycle.md. Every 5 cycles: run analyze.
 REPEAT
 ```
 
-### SELECT (with Swarm Intelligence)
-**Primary method: Swarm-consensus selection** — Run `./engine/evolve swarm-select`. This runs real Monte Carlo simulation: builds a transition model from historical cycle data, simulates 500 forward trajectories per strategy, then 5 virtual personas (Explorer, Exploiter, Contrarian, Survivor, Strategist) independently evaluate the simulations and vote via Borda count. The result is a strategy recommendation grounded in statistical reality, not LLM imagination.
+### SELECT (with Foresight)
+Run `./engine/evolve select` — **Contextual Thompson Sampling** (Beta distribution with fitness-level context). Strategies track success rates per context bucket (low/mid/high fitness), so selection adapts to the current situation. Seeds are logged for reproducibility. Cumulative regret is tracked.
 
-**Fallback: Thompson Sampling** — Run `./engine/evolve select` when you have fewer than 3 completed cycles (not enough data for Monte Carlo). This uses Contextual Thompson Sampling with Beta distributions.
+**Before executing the selected strategy**, run Foresight at key moments:
 
-**When to use which:**
-- **Cycles 1-3**: Use `./engine/evolve select` (Thompson Sampling — not enough history for simulation)
-- **Cycles 4+**: Use `./engine/evolve swarm-select` (Monte Carlo + swarm consensus — data-driven)
-- **Every 5 cycles**: Also run `./engine/evolve swarm-landscape` to check for coverage gaps in the fitness landscape
-- **Before any major pivot**: Run `./engine/evolve swarm-simulate 1000 20` (higher fidelity, longer horizon) to see if the pivot is justified
+- **Every 5 cycles OR after a phase transition**: Run a full debate. Use `./engine/evolve debate` to generate the debate prompt, then argue Blue Team vs Red Team for each available strategy. Fill in scenario templates, then evaluate with `./engine/evolve forecast-eval`.
+- **Before any major pivot**: Run a premortem on the proposed plan. Use `./engine/evolve premortem` to imagine the plan failing. Fix the plan based on what you discover.
+- **When stuck (3+ failures)**: Run a backcast. Use `./engine/evolve backcast` to work backwards from the desired end state. This reveals the critical path you should be on.
+- **After every debate**: Log the prediction with `./engine/evolve foresight log "debate_outcome" '{"chosen_strategy":"SXXX","predicted_gain":0.XX,"cycle":N}'`. After seeing actual results, log `./engine/evolve foresight log "actual_outcome" '{"strategy":"SXXX","actual_gain":0.XX,"cycle":N}'` to track prediction accuracy.
 
-**Swarm output tells you:**
-- `recommended`: which strategy the swarm consensus picked
-- `confidence`: unanimity ratio (1.0 = all personas agree, 0.2 = only one agrees)
-- `persona_top_picks`: who picked what and why — if the Explorer disagrees with the Exploiter, you're at an explore/exploit boundary
-- `simulations[S001].prob_improve`: probability this strategy improves fitness
-- `simulations[S001].prob_regression`: probability this strategy causes regression
-- `simulations[S001].sharpe_ratio`: risk-adjusted expected gain
-
-**Low confidence (<0.4)**: The swarm is divided. Run `./engine/evolve swarm-predict "SXXX"` on the top 2 candidates to compare detailed trajectories. If the Contrarian is the only dissenter, consider following the majority. If the Survivor dissents, check `prob_regression` — the safe choice may be worth it.
-
-**Foresight integration** (for key moments — use alongside swarm, not instead of):
-- **Before any major pivot**: Run a premortem. Use `./engine/evolve premortem` to imagine the plan failing.
-- **When stuck (3+ failures)**: Run a backcast. Use `./engine/evolve backcast` to work backwards from the desired end state.
-- **After every swarm select**: Log the prediction with `./engine/evolve foresight log "swarm_select" '{"chosen":"SXXX","confidence":0.XX,"cycle":N}'`. After seeing actual results, log `./engine/evolve foresight log "actual_outcome" '{"strategy":"SXXX","actual_gain":0.XX,"cycle":N}'` to calibrate.
-
-The point: **don't guess — simulate.** Let the data from your own history drive the decision.
+The point: **don't just execute — think first.** See the future, find the fastest path, anticipate failures before they happen.
 
 ### EXECUTE
 - **One change per cycle.** Never bundle unrelated changes.

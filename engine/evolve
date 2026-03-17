@@ -283,29 +283,6 @@ case "$CMD" in
         python3 "$ENGINE_DIR/outcomes.py" lessons
         ;;
 
-    # --- Swarm Intelligence (Monte Carlo + Multi-Persona Consensus) ---
-    swarm)
-        python3 "$ENGINE_DIR/swarm.py" "$@"
-        ;;
-    swarm-simulate)
-        python3 "$ENGINE_DIR/swarm.py" simulate "$@"
-        ;;
-    swarm-select)
-        python3 "$ENGINE_DIR/swarm.py" select
-        ;;
-    swarm-landscape)
-        python3 "$ENGINE_DIR/swarm.py" landscape
-        ;;
-    swarm-predict)
-        python3 "$ENGINE_DIR/swarm.py" predict "$@"
-        ;;
-    swarm-personas)
-        python3 "$ENGINE_DIR/swarm.py" personas
-        ;;
-    swarm-history)
-        python3 "$ENGINE_DIR/swarm.py" history "$@"
-        ;;
-
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -331,8 +308,6 @@ case "$CMD" in
         echo "             decide-approve | decide-deny | decide-pending"
         echo "Outcomes:    outcome | outcome-log | outcome-query | outcome-stats"
         echo "             outcome-retro | outcome-lessons"
-        echo "Swarm:       swarm | swarm-simulate | swarm-select | swarm-landscape"
-        echo "             swarm-predict | swarm-personas | swarm-history"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
