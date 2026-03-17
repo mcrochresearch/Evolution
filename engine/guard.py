@@ -99,12 +99,79 @@ def is_test_file(filepath: str) -> bool:
 # scan subcommand
 # ---------------------------------------------------------------------------
 
+def _is_in_comment(line_content: str) -> bool:
+    """Check if the line is a comment (rough heuristic)."""
+    stripped = line_content.strip()
+    return (stripped.startswith("//") or stripped.startswith("#") or
+            stripped.startswith("*") or stripped.startswith("/*") or
+            stripped.startswith("'''") or stripped.startswith('"""'))
+
+
+def _measure_complexity_delta(ref: str) -> dict:
+    """Measure complexity change between ref and working tree.
+
+    Tracks:
+    - lines_added / lines_removed (net change)
+    - max nesting depth added (proxy for cyclomatic complexity)
+    - files_changed count
+    """
+    diff_text = run_git("diff", ref, "--stat")
+    # Parse --stat output for file count and net lines
+    lines = diff_text.strip().splitlines()
+    if not lines:
+        return {"files_changed": 0, "lines_added": 0, "lines_removed": 0, "net_lines": 0}
+
+    # Get detailed numstat for precise counts
+    numstat = run_git("diff", ref, "--numstat")
+    added = 0
+    removed = 0
+    files_changed = 0
+    for line in numstat.strip().splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3:
+            try:
+                a = int(parts[0]) if parts[0] != "-" else 0
+                r = int(parts[1]) if parts[1] != "-" else 0
+                added += a
+                removed += r
+                files_changed += 1
+            except ValueError:
+                continue
+
+    # Check for deep nesting in added lines (indent-based proxy)
+    diff_lines = run_git("diff", ref, "--unified=0")
+    max_indent_added = 0
+    for filepath, _line_no, content in parse_diff(diff_lines):
+        if content and not _is_in_comment(content):
+            # Count leading spaces (tabs = 4 spaces equivalent)
+            stripped = content.replace("\t", "    ")
+            indent = len(stripped) - len(stripped.lstrip())
+            depth = indent // 4
+            max_indent_added = max(max_indent_added, depth)
+
+    return {
+        "files_changed": files_changed,
+        "lines_added": added,
+        "lines_removed": removed,
+        "net_lines": added - removed,
+        "max_nesting_depth_added": max_indent_added,
+        "complexity_warning": (
+            f"High complexity: +{added - removed} net lines, max nesting depth {max_indent_added}"
+            if (added - removed > 50 or max_indent_added >= 5) else None
+        ),
+    }
+
+
 def cmd_scan(ref: str = "HEAD") -> int:
-    """Scan the diff against `ref` for anti-patterns. Returns exit code."""
+    """Scan the diff against `ref` for anti-patterns and complexity. Returns exit code."""
     diff_text = run_git("diff", ref, "--unified=0")
 
     violations = []
     for filepath, line_no, line_content in parse_diff(diff_text):
+        # Skip lines that are pure comments — patterns in comments are documentation, not violations
+        if _is_in_comment(line_content):
+            continue
+
         # Check standard patterns
         for pat in PATTERNS:
             if re.search(pat["regex"], line_content):
@@ -122,8 +189,16 @@ def cmd_scan(ref: str = "HEAD") -> int:
                 "line": line_no,
             })
 
+    # Measure complexity delta
+    complexity = _measure_complexity_delta(ref)
+
     clean = len(violations) == 0
-    output = {"violations": violations, "clean": clean}
+    output = {
+        "violations": violations,
+        "violation_count": len(violations),
+        "clean": clean,
+        "complexity": complexity,
+    }
     print(json.dumps(output, indent=2))
     return 0 if clean else 1
 

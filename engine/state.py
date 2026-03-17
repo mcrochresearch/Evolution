@@ -41,6 +41,49 @@ except ImportError:
 STATE_DIR = Path(os.environ.get("EVOLUTION_STATE_DIR", "evolution/.state"))
 STATE_FILE = STATE_DIR / "evolution.json"
 LOCK_FILE = STATE_DIR / ".lock"
+PROMPT_DNA_FILE = Path(os.environ.get("EVOLUTION_DNA_FILE", "evolution/genome/prompt-dna.md"))
+
+
+def load_prompt_dna() -> dict:
+    """Parse prompt-dna.md markdown table into a dict of parameter values.
+
+    Returns dict like: {"risk_tolerance": 0.4, "exploration_rate": 0.3, ...}
+    Silently returns defaults if the file doesn't exist or can't be parsed.
+    """
+    defaults = {
+        "reasoning_style": "chain_of_thought",
+        "planning_depth": 3,
+        "reflection_depth": 2,
+        "risk_tolerance": 0.40,
+        "verification_rigor": 0.80,
+        "exploration_rate": 0.30,
+        "patience": 0.60,
+        "detail_orientation": 0.70,
+        "parallelism": 0.50,
+    }
+    if not PROMPT_DNA_FILE.exists():
+        return defaults
+    try:
+        import re as _re
+        content = PROMPT_DNA_FILE.read_text()
+        # Parse markdown table rows: | param | value | range | desc |
+        for line in content.splitlines():
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 4 and parts[1] in defaults:
+                raw_val = parts[2]
+                # Try numeric parse
+                try:
+                    if "." in raw_val:
+                        defaults[parts[1]] = float(raw_val)
+                    elif raw_val.isdigit():
+                        defaults[parts[1]] = int(raw_val)
+                    else:
+                        defaults[parts[1]] = raw_val
+                except (ValueError, TypeError):
+                    defaults[parts[1]] = raw_val
+    except Exception:
+        pass
+    return defaults
 
 # --- Named Constants ---
 # Phase detection thresholds (documented rationale)
@@ -320,6 +363,7 @@ def cmd_add_strategy(name: str, approach: str, hypothesis: str):
             "successes": 0,
             "generation": 1,
             "created": now(),
+            "created_at_cycle": state.get("cycle", 0),
             "parents": [],
             "status": "CANDIDATE",
         }
@@ -357,7 +401,7 @@ def cmd_select():
     scores = []
     for s in strategies:
         ctx_data = s.get("context_stats", {}).get(context)
-        if ctx_data and ctx_data.get("attempts", 0) >= 2:
+        if ctx_data and ctx_data.get("attempts", 0) >= 5:
             # Use context-specific posterior
             alpha = ctx_data["successes"] + 1
             beta_param = (ctx_data["attempts"] - ctx_data["successes"]) + 1
@@ -372,7 +416,6 @@ def cmd_select():
     selected = scores[0][1]
 
     # Track last selected for guided mode
-    save_state(state)  # ensure _last_selected persists
     state["_last_selected"] = selected["id"]
     save_state(state)
 
@@ -481,8 +524,20 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
             recent_sd = _sample_sd(history[-5:])
             surprise_threshold = max(SURPRISE_BASELINE, 2 * recent_sd)
         else:
+            recent_sd = None
             surprise_threshold = SURPRISE_BASELINE
         is_surprise = abs(delta) > surprise_threshold
+
+        # Noise estimation: track measurement reliability
+        # If fitness oscillates by more than 2% between cycles without code changes,
+        # the fitness signal is noisy and keep/revert decisions may be unreliable.
+        noise_warning = None
+        if recent_sd is not None and recent_sd > 0.02:
+            noise_warning = (
+                f"NOISY_MEASUREMENT: fitness SD={recent_sd:.3f} over last 5 cycles. "
+                f"Delta={delta:.4f} may be noise, not signal. "
+                f"Consider running fitness 2-3x to confirm before keep/revert decisions."
+            )
 
         # Log episode
         state["episodes"].append({
@@ -525,6 +580,8 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
         cycle_log["meta_triggers"] = meta_triggers
     if budget_warning:
         cycle_log["budget_warning"] = budget_warning
+    if noise_warning:
+        cycle_log["noise_warning"] = noise_warning
     print(json.dumps(cycle_log))
 
 
@@ -684,6 +741,7 @@ def cmd_mutate(parent_id: str, name: str, approach: str):
             "successes": 0,
             "generation": parent["generation"] + 1,
             "created": now(),
+            "created_at_cycle": state.get("cycle", 0),
             "parents": [parent_id],
             "status": "CANDIDATE",
         }
@@ -717,6 +775,7 @@ def cmd_crossover(id1: str, id2: str, name: str):
             "successes": 0,
             "generation": max(parent1["generation"], parent2["generation"]) + 1,
             "created": now(),
+            "created_at_cycle": state.get("cycle", 0),
             "parents": [id1, id2],
             "status": "CANDIDATE",
         }
@@ -743,10 +802,19 @@ def cmd_cull(max_pop: int = MAX_POPULATION):
     to_cull = len(active) - max_pop
     culled = []
 
+    # Determine minimum cycles a strategy must survive before being cull-eligible.
+    # Young strategies (< 3 attempts) and recently created strategies
+    # (created within last 5 cycles) are protected from premature elimination.
+    current_cycle = state.get("cycle", 0)
+
     culled_ids = set()
     for s in active[:to_cull]:
-        # Don't cull strategies that haven't been tested enough
-        if s["attempts"] < 2:
+        # Protection 1: sample-size — need enough data to judge
+        if s["attempts"] < 3:
+            continue
+        # Protection 2: youth — recently created strategies get a grace period
+        created_cycle = s.get("created_at_cycle", 0)
+        if current_cycle - created_cycle < 5:
             continue
         wilson = _wilson_lower(s["successes"], s["attempts"])
         s["status"] = "EXTINCT"
@@ -838,7 +906,7 @@ def cmd_crystallize():
         if sid in existing_sources:
             continue
         total = data["kept"] + data["reverted"]
-        if total < 3:  # Lowered from 5 — learn faster, crystallize earlier
+        if total < 5:  # Need meaningful sample size (Wilson CI too wide below 5)
             continue
         wilson = _wilson_lower(data["kept"], total)
         all_strats = state["strategies"] + state["graveyard"]
@@ -934,8 +1002,11 @@ def cmd_next():
         if principles:
             principle_context = "; ".join(p["principle"] for p in principles[-5:])
 
+        # Load prompt-DNA parameters to influence guidance
+        dna = load_prompt_dna()
+
         result = {"step": loop_step, "goal": goal, "cycle": cycle, "fitness": fitness,
-                  "phase": phase, "urgency": urgency}
+                  "phase": phase, "urgency": urgency, "dna": dna}
 
         if loop_step == "ADD_STRATEGIES":
             result["instruction"] = (
@@ -1011,8 +1082,11 @@ def cmd_next():
             state["_loop_step"] = "REFLECT"
 
         elif loop_step == "REFLECT":
-            should_crystallize = len(episodes) >= 10 and len(episodes) % 10 == 0
-            should_analyze = cycle > 0 and cycle % 5 == 0
+            # DNA: patience controls how often we analyze (lower patience = more frequent)
+            analyze_interval = max(3, int(5 * dna.get("patience", 0.6)))
+            crystallize_interval = max(5, int(10 * dna.get("patience", 0.6)))
+            should_crystallize = len(episodes) >= 5 and len(episodes) % crystallize_interval == 0
+            should_analyze = cycle > 0 and cycle % analyze_interval == 0
 
             result["instruction"] = (
                 "REFLECT: Why did the last action work or fail? Write a 1-2 sentence reflection. "
@@ -1034,9 +1108,17 @@ def cmd_next():
             state["_loop_step"] = "EVOLVE"
 
         elif loop_step == "EVOLVE":
+            # DNA: risk_tolerance controls how aggressively we evolve
+            risk = dna.get("risk_tolerance", 0.4)
+            # High risk = more willing to kill strategies and try radical pivots
+            # Low risk = more conservative, prefer mutations over extinctions
             result["instruction"] = (
                 "EVOLVE your strategy population. Based on recent outcomes: "
             )
+            if risk > 0.6:
+                result["instruction"] += f"(DNA: risk_tolerance={risk:.2f} — BE BOLD. Favor radical changes.) "
+            elif risk < 0.3:
+                result["instruction"] += f"(DNA: risk_tolerance={risk:.2f} — be conservative. Prefer small mutations.) "
             if consecutive_successes >= 2:
                 result["instruction"] += (
                     "Current strategy is working. Consider MUTATING it to create a variant that might work even better. "
@@ -1264,6 +1346,10 @@ def main():
             cmd_crystallize()
         elif cmd == "next":
             cmd_next()
+        elif cmd == "dna":
+            dna = load_prompt_dna()
+            print(json.dumps({"dna": dna, "source": str(PROMPT_DNA_FILE),
+                              "exists": PROMPT_DNA_FILE.exists()}))
         elif cmd == "status":
             cmd_status()
         elif cmd == "fitness":

@@ -102,11 +102,27 @@ def cmd_patterns():
         else:
             max_failure_streak = max(max_failure_streak, current_streak)
 
-    # 3. Detect oscillation pattern
-    oscillating = False
+    # 3. Detect oscillation patterns — not just strict alternating, but also
+    # "sticky" patterns (KKRRKK, RRKRR) where the agent flip-flops between
+    # short runs of keep and revert without net progress.
+    oscillation_type = None
     if len(cycles) >= OSCILLATION_WINDOW:
         recent = [c["kept"] for c in cycles[-OSCILLATION_WINDOW:]]
-        oscillating = all(recent[i] != recent[i + 1] for i in range(len(recent) - 1))
+        # Classic: strict alternation (KRKRKR)
+        if all(recent[i] != recent[i + 1] for i in range(len(recent) - 1)):
+            oscillation_type = "alternating"
+        else:
+            # Sticky: count direction changes. In 6 cycles, 4+ reversals = oscillation.
+            reversals = sum(1 for i in range(len(recent) - 1) if recent[i] != recent[i + 1])
+            if reversals >= OSCILLATION_WINDOW - 2:
+                oscillation_type = "high_churn"
+            # Net-zero: roughly equal keeps and reverts with no fitness progress
+            elif abs(sum(1 for r in recent if r) - sum(1 for r in recent if not r)) <= 1:
+                recent_deltas = [c["delta"] for c in cycles[-OSCILLATION_WINDOW:]]
+                net_delta = sum(recent_deltas)
+                if abs(net_delta) < 0.02:
+                    oscillation_type = "net_zero"
+    oscillating = oscillation_type is not None
 
     # 4. Fitness trajectory analysis
     history = state["fitness_history"]
@@ -145,6 +161,7 @@ def cmd_patterns():
         "max_success_streak": max_success_streak,
         "max_failure_streak": max_failure_streak,
         "oscillating": oscillating,
+        "oscillation_type": oscillation_type,
         "trajectory": trajectory,
         "success_keywords": success_words,
         "failure_keywords": failure_words,
@@ -353,8 +370,36 @@ def cmd_velocity():
     }, indent=2))
 
 
+def _approach_tokens(approach: str) -> set:
+    """Extract lowercase word tokens from a strategy approach description."""
+    return set(w.lower() for w in approach.split() if len(w) > 3)
+
+
+def _pairwise_behavioral_distance(strategies: list) -> float:
+    """Compute average pairwise Jaccard distance between strategy approaches.
+
+    Measures how textually different the strategy descriptions are from each other.
+    1.0 = completely different approaches, 0.0 = identical approaches.
+    This is a proxy for behavioral diversity — strategies with different descriptions
+    are likely to try different things.
+    """
+    if len(strategies) < 2:
+        return 1.0
+    token_sets = [_approach_tokens(s["approach"]) for s in strategies]
+    distances = []
+    for i in range(len(token_sets)):
+        for j in range(i + 1, len(token_sets)):
+            a, b = token_sets[i], token_sets[j]
+            union = a | b
+            if not union:
+                distances.append(0.0)
+            else:
+                distances.append(1.0 - len(a & b) / len(union))
+    return round(sum(distances) / len(distances), 4) if distances else 1.0
+
+
 def cmd_diversity():
-    """Measure strategy population diversity (Quality-Diversity check)."""
+    """Measure strategy population diversity (behavioral + genealogical)."""
     state = load_state()
     strategies = state["strategies"]
 
@@ -376,24 +421,34 @@ def cmd_diversity():
     fitness_mean = sum(fitnesses) / len(fitnesses)
     fitness_variance = sum((f - fitness_mean) ** 2 for f in fitnesses) / len(fitnesses)
 
-    # Diversity score: higher is more diverse
+    # Genealogical diversity: how many distinct lineages
     n_strategies = len(strategies)
     n_lineages = len(lineages)
-    diversity = n_lineages / max(n_strategies, 1)
+    genealogical_diversity = n_lineages / max(n_strategies, 1)
+
+    # Behavioral diversity: how different are the approach descriptions
+    behavioral_distance = _pairwise_behavioral_distance(strategies)
+
+    # Combined diversity score (weighted: 40% genealogical, 60% behavioral)
+    diversity = round(0.4 * genealogical_diversity + 0.6 * behavioral_distance, 3)
 
     # Status distribution
     statuses = Counter(s["status"] for s in strategies)
 
     recommendation = "HEALTHY"
-    if diversity < 0.3:
-        recommendation = "ADD_DIVERSITY — too many strategies from same lineage"
+    if behavioral_distance < 0.3:
+        recommendation = "ADD_DIVERSITY — strategies use similar approaches, try fundamentally different methods"
+    elif genealogical_diversity < 0.3 and n_strategies > 3:
+        recommendation = "ADD_LINEAGES — too many strategies from same parent, add fresh strategies"
     elif n_strategies < 3:
         recommendation = "ADD_STRATEGIES — population too small for effective selection"
     elif fitness_variance < 0.001 and n_strategies > 3:
-        recommendation = "DIFFERENTIATE — strategies are too similar in fitness"
+        recommendation = "DIFFERENTIATE — strategies are too similar in fitness, try bolder approaches"
 
     print(json.dumps({
-        "diversity_score": round(diversity, 3),
+        "diversity_score": diversity,
+        "genealogical_diversity": round(genealogical_diversity, 3),
+        "behavioral_distance": behavioral_distance,
         "total_strategies": n_strategies,
         "unique_lineages": n_lineages,
         "generations": dict(generations),

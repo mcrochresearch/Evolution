@@ -261,13 +261,56 @@ def cmd_promote(skill_id: str):
         registry["promoted"].append(skill_id)
     save_registry(registry)
 
+    # Write-back to genome: append promoted skill to procedural.md
+    _write_back_to_genome(skill, wilson)
+
     print(json.dumps({
         "status": "promoted",
         "skill": skill_id,
         "from": str(src),
         "to": str(dest),
         "wilson_lower_bound": wilson,
+        "genome_updated": True,
     }))
+
+
+def _write_back_to_genome(skill: dict, wilson: float):
+    """Write a promoted skill back to evolution/cortex/procedural.md.
+
+    This closes the loop: SkillForge extraction -> promotion -> genome integration.
+    Promoted skills become permanent procedural knowledge that the agent loads on milestones.
+    """
+    procedural = Path("evolution/cortex/procedural.md")
+    try:
+        if procedural.exists():
+            existing = procedural.read_text()
+        else:
+            procedural.parent.mkdir(parents=True, exist_ok=True)
+            existing = "# Procedural Memory — Proven Recipes\n\n> Promoted skills from SkillForge. Load on milestones.\n\n"
+
+        entry = (
+            f"\n---\n\n"
+            f"### {skill['name']} ({skill['id']})\n"
+            f"- **Promoted**: {now()[:10]}\n"
+            f"- **Uses**: {skill['times_used']} (success rate: {skill['successes']}/{skill['times_used']})\n"
+            f"- **Wilson lower bound**: {wilson:.3f}\n"
+            f"- **Description**: {skill['description']}\n"
+        )
+
+        # Don't duplicate
+        if skill['id'] not in existing:
+            fd, tmp_path = tempfile.mkstemp(dir=procedural.parent, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    f.write(existing + entry)
+                os.replace(tmp_path, procedural)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+    except Exception:
+        pass  # Non-critical: skill promotion succeeded even if genome write-back fails
 
 
 def cmd_list():

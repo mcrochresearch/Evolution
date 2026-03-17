@@ -39,6 +39,9 @@ case "$CMD" in
     next)
         python3 "$ENGINE_DIR/state.py" next
         ;;
+    dna)
+        python3 "$ENGINE_DIR/state.py" dna
+        ;;
 
     # --- State Management ---
     init)

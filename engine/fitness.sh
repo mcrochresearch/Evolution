@@ -288,11 +288,36 @@ else
 fi
 
 # --- Compute overall fitness ---
+# Test count confidence: low test counts discount the fitness score.
+# 0 tests = 0 confidence (multiplier 0.0)
+# 1 test  = low confidence (multiplier 0.3)
+# 5 tests = moderate (multiplier 0.7)
+# 10+ tests = full confidence (multiplier 1.0)
+# This prevents 1/1 passing tests from scoring the same as 100/100.
+TEST_COUNT_CONFIDENCE=$(python3 -c "
+import math
+n = $TESTS_TOTAL
+if n == 0:
+    print(0.0)
+else:
+    # Logarithmic curve: saturates around 10 tests
+    confidence = min(1.0, math.log(n + 1) / math.log(11))
+    print(round(confidence, 4))
+" 2>/dev/null || echo "1.0")
+
 if [[ ${#RESULTS[@]} -gt 0 ]]; then
     FITNESS=$(python3 -c "
 tw = $TOTAL_WEIGHT
 ts = $TOTAL_SCORE
-print(round(ts / max(tw, 0.001), 4))
+raw = ts / max(tw, 0.001)
+# Apply test count confidence as a multiplier on the test component
+# Other components (build, lint, types) are unaffected
+confidence = $TEST_COUNT_CONFIDENCE
+# Blend: if test confidence is low, cap overall fitness proportionally
+# Even perfect build+lint+types can't compensate for no tests
+test_weight_fraction = $WEIGHT_TESTS / max(tw, 0.001)
+adjusted = raw * (1.0 - test_weight_fraction * (1.0 - confidence))
+print(round(adjusted, 4))
 " 2>/dev/null || echo "0")
 else
     FITNESS="0"
@@ -382,10 +407,13 @@ environment = {
     'timestamp': '$ENV_TIMESTAMP'
 }
 
+test_count_confidence = float('$TEST_COUNT_CONFIDENCE')
+
 output = {
     'fitness': fitness,
     'tests_passing': tests_passing,
     'tests_total': tests_total,
+    'test_count_confidence': test_count_confidence,
     'build': build_ok,
     'lint': lint_ok,
     'types': types_ok,

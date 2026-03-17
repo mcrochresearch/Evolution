@@ -207,15 +207,27 @@ print(entries[-1]['number'] if entries else '')
         return 0
     fi
 
+    # ATOMIC REVERT: Create a safety stash before reverting so we can recover
+    # from partial reverts. If any step fails, we restore from the stash.
+
+    # Step 0: Stash current state as safety net
+    safe_stage
+    local stash_created=false
+    if git stash push -m "evolution-revert-safety-$(date +%s)" --include-untracked 2>/dev/null; then
+        stash_created=true
+    fi
+
     # Step 1: Find files that exist now but did not exist at checkpoint time.
-    # These are files created after the checkpoint — git checkout won't remove them.
     local new_files
     new_files=$(git diff --name-only --diff-filter=A "$commit_hash" HEAD 2>/dev/null || true)
 
     # Step 2: Checkout the checkpoint tree over the working directory.
-    # This restores all files that existed at checkpoint time to their checkpoint state.
     if ! git checkout "$commit_hash" -- . 2>/dev/null; then
-        echo "{\"error\":\"Failed to checkout checkpoint $commit_hash. Working tree may be in an inconsistent state.\"}"
+        # RECOVERY: Restore from safety stash
+        if [[ "$stash_created" == "true" ]]; then
+            git stash pop 2>/dev/null || true
+        fi
+        echo "{\"error\":\"Failed to checkout checkpoint $commit_hash. Working tree restored from safety stash.\"}"
         exit 1
     fi
 
@@ -237,7 +249,12 @@ print(entries[-1]['number'] if entries else '')
     # Step 4: Reset the index to match what we just checked out
     safe_stage
 
-    echo "{\"status\":\"reverted\",\"to\":{\"number\":$num,\"ref\":\"$ref\",\"commit\":\"$commit_hash\"},\"method\":\"checkout+clean\"}"
+    # Step 5: Drop the safety stash on success (keep it on failure)
+    if [[ "$stash_created" == "true" ]]; then
+        git stash drop 2>/dev/null || true
+    fi
+
+    echo "{\"status\":\"reverted\",\"to\":{\"number\":$num,\"ref\":\"$ref\",\"commit\":\"$commit_hash\"},\"method\":\"atomic_checkout+clean\"}"
 }
 
 cmd_list() {
