@@ -1,0 +1,3 @@
+- Prisco Appliance (247 Tarrytown Rd, White Plains NY) - 57-year family business, $3M rev, 4.9★ (206 reviews), zero ads, 57 Instagram followers
+- Greenway Dental (123 Main St, Greenwich CT) - 20-year practice, 4.8★ (150 reviews), no social media presence
+- Stamford Law Group (456 Oak Ave, Stamford CT) - 15-year firm, 4.7★ (89 reviews), minimal online presence

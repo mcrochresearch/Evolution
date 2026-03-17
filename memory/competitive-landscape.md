@@ -1,0 +1,3 @@
+- Stamford Marketing Co: $2,500/month retainer, 50+ clients, limited AI integration
+- Greenway Marketing: $3,000/month retainer, 30+ clients, basic SEO + social media
+- LocalGrowth Solutions: $4,000/month retainer, 20+ clients, full digital marketing
