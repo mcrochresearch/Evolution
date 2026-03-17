@@ -30,9 +30,13 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
-import math
+
+try:
+    from engine.stats import now, wilson_lower
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from stats import now, wilson_lower
 
 SKILLS_DIR = Path("evolution/skills")
 REGISTRY = Path("evolution/.state/skill-registry.json")
@@ -40,10 +44,6 @@ REGISTRY = Path("evolution/.state/skill-registry.json")
 # Promotion criteria
 MIN_USES_FOR_PROMOTION = 3
 MIN_SUCCESS_RATE_FOR_PROMOTION = 0.60
-
-
-def now():
-    return datetime.now(timezone.utc).isoformat()
 
 
 def load_registry():
@@ -68,16 +68,6 @@ def save_registry(registry):
             pass
         raise
 
-
-def wilson_lower(successes: int, total: int, z: float = 1.96) -> float:
-    """Wilson score lower bound — conservative estimate of true success rate."""
-    if total == 0:
-        return 0.0
-    phat = successes / total
-    denominator = 1 + z * z / total
-    center = (phat + z * z / (2 * total)) / denominator
-    spread = z * math.sqrt((phat * (1 - phat) + z * z / (4 * total)) / total) / denominator
-    return max(0, round(center - spread, 4))
 
 
 def find_skill_by_id(registry, skill_id):

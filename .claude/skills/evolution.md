@@ -48,10 +48,18 @@ Evolution has an executable engine. Use these commands via Bash:
 ./engine/evolve skill-list
 ./engine/evolve skill-promote "SK001"
 
+# Guard (mechanical anti-pattern detection)
+./engine/evolve guard                          # Scan diff for anti-patterns
+./engine/evolve test-count HEAD~1 HEAD         # Verify test count didn't drop
+
+# Audit (independent tamper-evident log)
+./engine/evolve audit log "cycle" '{"data":1}' # Log event
+./engine/evolve audit-verify                   # Verify hash chain integrity
+
 # State management
-./engine/evolve reset                          # Clear all state
+./engine/evolve reset --force                  # Clear all state (requires --force)
 ./engine/evolve export > backup.json           # Backup
-./engine/evolve import < backup.json           # Restore
+./engine/evolve import < backup.json           # Restore (validates types + migrates)
 ```
 
 **Always use the engine for fitness scoring and strategy selection.** The engine implements real Thompson Sampling, mechanical fitness, and statistical analysis — no subjective guessing.
@@ -105,6 +113,12 @@ Run `./engine/evolve fitness` — auto-detects project type, runs all checks wit
 - `errors`: any issues encountered during verification
 
 **NEVER score fitness subjectively.** Trust the engine's output.
+
+Fitness weights are configurable via environment variables:
+- `EVOLUTION_WEIGHT_TESTS` (default 0.40)
+- `EVOLUTION_WEIGHT_BUILD` (default 0.20)
+- `EVOLUTION_WEIGHT_LINT` (default 0.15)
+- `EVOLUTION_WEIGHT_TYPES` (default 0.15)
 
 If no tests exist, your FIRST action is to create them. You cannot evolve without mechanical verification.
 
@@ -185,9 +199,23 @@ The engine outputs `meta_triggers` in cycle results when analysis is needed:
 - **VERIFY**: "Did the metric improve?" (the GOAL signal)
 - **GUARD**: "Did anything else break?" (the SAFETY signal)
 
-Run VERIFY first (`./engine/evolve fitness`). Then check GUARD: existing tests pass? Build works? No new lint errors?
+Run VERIFY first (`./engine/evolve fitness`). Then check GUARD mechanically:
+```bash
+./engine/evolve guard       # Scan diff for @ts-ignore, eslint-disable, etc.
+./engine/evolve test-count HEAD~1 HEAD  # Verify test count didn't decrease
+```
 
 A change that improves VERIFY but breaks GUARD → REWORK (max 2 attempts, then DISCARD).
+
+## AUDIT TRAIL
+
+Every significant action should be logged to the independent audit trail:
+```bash
+./engine/evolve audit log "cycle" '{"cycle":N,"fitness":0.XX,"kept":true}'
+./engine/evolve audit log "checkpoint" '{"ref":"abc123"}'
+./engine/evolve audit log "revert" '{"reason":"tests failed"}'
+```
+Run `./engine/evolve audit-verify` periodically to verify hash chain integrity.
 
 ## ANTI-PATTERNS (Immediate Revert)
 

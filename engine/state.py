@@ -27,11 +27,16 @@ import fcntl
 import json
 import os
 import sys
-import math
 import random
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    from engine.stats import now, wilson_lower as _wilson_lower, sample_sd as _sample_sd
+except ImportError:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from stats import now, wilson_lower as _wilson_lower, sample_sd as _sample_sd
 
 STATE_DIR = Path(os.environ.get("EVOLUTION_STATE_DIR", "evolution/.state"))
 STATE_FILE = STATE_DIR / "evolution.json"
@@ -80,9 +85,6 @@ def default_state(goal: str) -> dict:
     }
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
 
 def _acquire_lock():
     """Acquire an exclusive file lock for state operations."""
@@ -98,13 +100,56 @@ def _release_lock(lock_fd):
     lock_fd.close()
 
 
+CURRENT_STATE_VERSION = 3
+
+
+def _migrate_state(state: dict) -> dict:
+    """Migrate state from older versions to current version.
+
+    Version history:
+      1 → 2: Added cumulative_regret, context_stats, _phase_pending fields
+      2 → 3: Added max_cycles, next_strategy_id
+    """
+    version = state.get("version", 1)
+
+    if version < 2:
+        state.setdefault("cumulative_regret", 0.0)
+        state.setdefault("_phase_pending", None)
+        state.setdefault("_phase_pending_count", 0)
+        state["version"] = 2
+        version = 2
+
+    if version < 3:
+        state.setdefault("max_cycles", MAX_CYCLES_DEFAULT)
+        state.setdefault("next_strategy_id",
+                         len(state.get("strategies", [])) + len(state.get("graveyard", [])) + 1)
+        # Migrate parent string to parents list
+        for s in state.get("strategies", []) + state.get("graveyard", []):
+            if "parent" in s and "parents" not in s:
+                old = s.pop("parent")
+                if old is None:
+                    s["parents"] = []
+                elif "×" in str(old):
+                    s["parents"] = old.split("×")
+                else:
+                    s["parents"] = [old]
+        state["version"] = 3
+        version = 3
+
+    return state
+
+
 def load_state() -> dict:
-    """Load state from JSON file."""
+    """Load state from JSON file with automatic version migration."""
     if not STATE_FILE.exists():
         print(json.dumps({"error": "No evolution state found. Run 'init' first."}))
         sys.exit(1)
     with open(STATE_FILE) as f:
-        return json.load(f)
+        state = json.load(f)
+    if state.get("version", 1) < CURRENT_STATE_VERSION:
+        state = _migrate_state(state)
+        save_state(state)
+    return state
 
 
 def save_state(state: dict):
@@ -155,6 +200,8 @@ class locked_state:
             sys.exit(1)
         with open(STATE_FILE) as f:
             self._state = json.load(f)
+        if self._state.get("version", 1) < CURRENT_STATE_VERSION:
+            self._state = _migrate_state(self._state)
         return self._state
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -269,7 +316,7 @@ def cmd_add_strategy(name: str, approach: str, hypothesis: str):
         "successes": 0,
         "generation": 1,
         "created": now(),
-        "parent": None,
+        "parents": [],
         "status": "CANDIDATE",
     }
     state["strategies"].append(strategy)
@@ -464,14 +511,6 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
     print(json.dumps(cycle_log))
 
 
-def _sample_sd(values: list) -> float:
-    """Compute sample standard deviation (Bessel-corrected)."""
-    n = len(values)
-    if n < 2:
-        return 0.0
-    mean = sum(values) / n
-    return math.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
-
 
 def _detect_raw_phase(state: dict) -> str:
     """Detect the raw phase signal (before hysteresis)."""
@@ -628,7 +667,7 @@ def cmd_mutate(parent_id: str, name: str, approach: str):
         "successes": 0,
         "generation": parent["generation"] + 1,
         "created": now(),
-        "parent": parent_id,
+        "parents": [parent_id],
         "status": "CANDIDATE",
     }
     state["strategies"].append(child)
@@ -662,7 +701,7 @@ def cmd_crossover(id1: str, id2: str, name: str):
         "successes": 0,
         "generation": max(parent1["generation"], parent2["generation"]) + 1,
         "created": now(),
-        "parent": f"{id1}×{id2}",
+        "parents": [id1, id2],
         "status": "CANDIDATE",
     }
     state["strategies"].append(child)
@@ -728,16 +767,6 @@ def cmd_resurrect(strategy_id: str):
     print(json.dumps({"error": f"Strategy {strategy_id} not found in graveyard"}))
     sys.exit(1)
 
-
-def _wilson_lower(successes: int, total: int, z: float = 1.96) -> float:
-    """Wilson score lower bound — conservative success rate estimate."""
-    if total == 0:
-        return 0.0
-    phat = successes / total
-    denom = 1 + z * z / total
-    center = (phat + z * z / (2 * total)) / denom
-    spread = z * math.sqrt((phat * (1 - phat) + z * z / (4 * total)) / total) / denom
-    return max(0, round(center - spread, 4))
 
 
 def cmd_crystallize():
@@ -900,15 +929,39 @@ def cmd_export():
 
 
 def cmd_import():
-    """Import state from stdin with schema validation."""
-    REQUIRED_KEYS = {"goal", "cycle", "strategies", "graveyard", "fitness_history",
-                     "cycles", "episodes", "fitness", "phase"}
+    """Import state from stdin with schema and type validation."""
+    REQUIRED_SCHEMA = {
+        "goal": str,
+        "cycle": int,
+        "strategies": list,
+        "graveyard": list,
+        "fitness_history": list,
+        "cycles": list,
+        "episodes": list,
+        "fitness": (int, float),
+        "phase": str,
+    }
     try:
         data = json.load(sys.stdin)
-        missing = REQUIRED_KEYS - set(data.keys())
+        # Check required keys
+        missing = set(REQUIRED_SCHEMA.keys()) - set(data.keys())
         if missing:
             print(json.dumps({"error": f"Invalid state: missing required fields: {sorted(missing)}"}))
             sys.exit(1)
+        # Validate types
+        type_errors = []
+        for key, expected in REQUIRED_SCHEMA.items():
+            if not isinstance(data[key], expected):
+                type_errors.append(f"{key}: expected {expected.__name__ if isinstance(expected, type) else expected}, got {type(data[key]).__name__}")
+        if type_errors:
+            print(json.dumps({"error": f"Type validation failed: {'; '.join(type_errors)}"}))
+            sys.exit(1)
+        # Validate fitness range
+        if not (0.0 <= data["fitness"] <= 1.0):
+            print(json.dumps({"error": f"fitness must be 0.0-1.0, got {data['fitness']}"}))
+            sys.exit(1)
+        # Migrate if older version
+        data = _migrate_state(data)
         save_state(data)
         print(json.dumps({"status": "imported", "goal": data["goal"], "cycle": data["cycle"]}))
     except json.JSONDecodeError as e:

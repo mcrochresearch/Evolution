@@ -141,6 +141,22 @@ case "$CMD" in
         python3 "$ENGINE_DIR/skillforge.py" stats
         ;;
 
+    # --- Guard ---
+    guard)
+        python3 "$ENGINE_DIR/guard.py" scan "$@"
+        ;;
+    test-count)
+        python3 "$ENGINE_DIR/guard.py" test-count "$@"
+        ;;
+
+    # --- Audit ---
+    audit)
+        python3 "$ENGINE_DIR/audit.py" "$@"
+        ;;
+    audit-verify)
+        python3 "$ENGINE_DIR/audit.py" verify
+        ;;
+
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -152,6 +168,8 @@ case "$CMD" in
         echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
         echo "             recommend | plateau | correlations"
         echo "SkillForge:  skill-extract | skill-use | skill-promote | skill-list | skill-stats"
+        echo "Guard:       guard | test-count"
+        echo "Audit:       audit | audit-verify"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2

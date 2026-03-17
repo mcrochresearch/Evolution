@@ -23,18 +23,22 @@ Usage:
 """
 
 import json
-import math
 import os
 import sys
 from pathlib import Path
 from collections import Counter
+
+try:
+    from engine.stats import wilson_score, effect_size
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from stats import wilson_score, effect_size
 
 STATE_DIR = Path(os.environ.get("EVOLUTION_STATE_DIR", "evolution/.state"))
 STATE_FILE = STATE_DIR / "evolution.json"
 
 # --- Named Constants ---
 MIN_CYCLES_FOR_PATTERNS = 5
-PLATEAU_VARIANCE = 0.02
 SIGNIFICANCE_THRESHOLD = 3   # Min observations before drawing conclusions
 OSCILLATION_WINDOW = 6       # Cycles to check for flip-flopping
 VELOCITY_WINDOW = 5          # Cycles per velocity window
@@ -47,43 +51,6 @@ def load_state() -> dict:
     with open(STATE_FILE) as f:
         return json.load(f)
 
-
-def wilson_score(successes: int, total: int, z: float = 1.96) -> tuple:
-    """Wilson score confidence interval for binomial proportion.
-
-    More statistically rigorous than simple success/total ratio,
-    especially for small sample sizes. Returns (lower, upper) bounds.
-    """
-    if total == 0:
-        return (0.0, 1.0)
-    phat = successes / total
-    denominator = 1 + z * z / total
-    center = (phat + z * z / (2 * total)) / denominator
-    spread = z * math.sqrt((phat * (1 - phat) + z * z / (4 * total)) / total) / denominator
-    return (max(0, round(center - spread, 4)), min(1, round(center + spread, 4)))
-
-
-def effect_size(group1: list, group2: list) -> float:
-    """Cohen's d effect size between two groups using Bessel-corrected pooled SD.
-
-    Returns magnitude of difference in standard deviation units:
-    - < 0.2: negligible
-    - 0.2-0.5: small
-    - 0.5-0.8: medium
-    - > 0.8: large
-    """
-    if not group1 or not group2:
-        return 0.0
-    n1, n2 = len(group1), len(group2)
-    mean1, mean2 = sum(group1) / n1, sum(group2) / n2
-    # Bessel-corrected sample variance (divide by n-1)
-    var1 = sum((x - mean1) ** 2 for x in group1) / max(n1 - 1, 1)
-    var2 = sum((x - mean2) ** 2 for x in group2) / max(n2 - 1, 1)
-    # Pooled SD weighted by degrees of freedom
-    pooled_sd = math.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / max(n1 + n2 - 2, 1))
-    if pooled_sd == 0:
-        return 0.0
-    return round((mean1 - mean2) / pooled_sd, 3)
 
 
 def cmd_patterns():
@@ -279,7 +246,7 @@ def cmd_blind_spots():
             })
 
     # 3. Never-explored mutation types
-    has_mutation = any(s.get("parent") for s in strategies)
+    has_mutation = any(s.get("parents") for s in strategies)
     if len(cycles) > 10 and not has_mutation:
         blind_spots.append({
             "type": "no_mutations",
@@ -399,7 +366,10 @@ def cmd_diversity():
     generations = Counter(s["generation"] for s in strategies)
 
     # Group by parent lineage
-    lineages = Counter(s.get("parent", "genesis") or "genesis" for s in strategies)
+    lineages = Counter(
+        tuple(s.get("parents", [])) if s.get("parents") else ("genesis",)
+        for s in strategies
+    )
 
     # Fitness distribution
     fitnesses = [s["fitness"] for s in strategies]
@@ -461,8 +431,8 @@ def cmd_recommend():
         })
         recommendations.append({
             "priority": 2,
-            "action": "Increase exploration rate to 0.50",
-            "reason": "Need more randomness to escape local optimum",
+            "action": "Add new strategies to increase posterior variance (Thompson Sampling explores via uncertainty)",
+            "reason": "New strategies with low sample counts get high variance, naturally increasing exploration",
         })
     elif phase == "GROWTH":
         recommendations.append({

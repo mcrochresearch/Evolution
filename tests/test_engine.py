@@ -282,7 +282,7 @@ class TestMutate:
         run_cmd(STATE_PY, "add-strategy", "Parent", "approach")
         out, rc = run_cmd(STATE_PY, "mutate", "S001", "Child", "modified approach")
         assert rc == 0
-        assert out["child"]["parent"] == "S001"
+        assert out["child"]["parents"] == ["S001"]
         assert out["child"]["generation"] == 2
         assert out["child"]["id"] == "S002"
 
@@ -294,7 +294,7 @@ class TestCrossover:
         run_cmd(STATE_PY, "add-strategy", "B", "b")
         out, rc = run_cmd(STATE_PY, "crossover", "S001", "S002", "AB")
         assert rc == 0
-        assert out["child"]["parent"] == "S001\u00d7S002"
+        assert out["child"]["parents"] == ["S001", "S002"]
 
 
 class TestCull:
@@ -354,7 +354,7 @@ class TestExportImport:
 class TestWilsonScore:
     def test_wilson_properties(self):
         sys.path.insert(0, ENGINE_DIR)
-        from state import _wilson_lower
+        from stats import wilson_lower as _wilson_lower
         assert _wilson_lower(0, 0) == 0.0
         # Perfect record with small sample is conservative
         assert _wilson_lower(3, 3) < 1.0
@@ -368,7 +368,7 @@ class TestWilsonScore:
 class TestSampleSD:
     def test_sd_properties(self):
         sys.path.insert(0, ENGINE_DIR)
-        from state import _sample_sd
+        from stats import sample_sd as _sample_sd
         assert _sample_sd([]) == 0.0
         assert _sample_sd([5.0]) == 0.0
         assert _sample_sd([1, 1, 1, 1]) == 0.0
@@ -460,6 +460,83 @@ class TestAnalyze:
 # ============================================================================
 # EDGE CASES
 # ============================================================================
+
+class TestImportTypeValidation:
+    def test_import_rejects_wrong_types(self, isolated_state):
+        run_cmd(STATE_PY, "init", "Test")
+        bad_state = json.dumps({
+            "goal": 123,  # should be str
+            "cycle": "not_int",  # should be int
+            "strategies": [],
+            "graveyard": [],
+            "fitness_history": [],
+            "cycles": [],
+            "episodes": [],
+            "fitness": 0.5,
+            "phase": "GENESIS",
+        })
+        out, rc = run_cmd(STATE_PY, "import", stdin_data=bad_state)
+        assert rc == 1
+        assert "Type validation failed" in out.get("error", "")
+
+    def test_import_rejects_bad_fitness(self, isolated_state):
+        run_cmd(STATE_PY, "init", "Test")
+        bad_state = json.dumps({
+            "goal": "test",
+            "cycle": 0,
+            "strategies": [],
+            "graveyard": [],
+            "fitness_history": [],
+            "cycles": [],
+            "episodes": [],
+            "fitness": 5.0,
+            "phase": "GENESIS",
+        })
+        out, rc = run_cmd(STATE_PY, "import", stdin_data=bad_state)
+        assert rc == 1
+        assert "fitness" in out.get("error", "").lower()
+
+
+class TestStateMigration:
+    def test_v1_to_v3_migration(self, isolated_state):
+        """Old v1 state should auto-migrate to v3."""
+        run_cmd(STATE_PY, "init", "Test")
+        state_file = isolated_state / "state" / "evolution.json"
+        state = json.loads(state_file.read_text())
+        # Simulate v1 state
+        del state["version"]
+        del state["cumulative_regret"]
+        del state["max_cycles"]
+        del state["next_strategy_id"]
+        del state["_phase_pending"]
+        del state["_phase_pending_count"]
+        state_file.write_text(json.dumps(state))
+        # Loading should trigger migration
+        out, rc = run_cmd(STATE_PY, "status")
+        assert rc == 0
+        state = json.loads(state_file.read_text())
+        assert state["version"] == 3
+        assert "cumulative_regret" in state
+        assert "max_cycles" in state
+
+    def test_parent_to_parents_migration(self, isolated_state):
+        """parent string field should migrate to parents list."""
+        run_cmd(STATE_PY, "init", "Test")
+        state_file = isolated_state / "state" / "evolution.json"
+        state = json.loads(state_file.read_text())
+        state["version"] = 2
+        state["strategies"] = [{
+            "id": "S001", "name": "A", "approach": "a", "hypothesis": "",
+            "fitness": 0.5, "attempts": 1, "successes": 1, "generation": 1,
+            "created": "2024-01-01", "parent": "S000", "status": "CANDIDATE",
+        }]
+        state_file.write_text(json.dumps(state))
+        out, rc = run_cmd(STATE_PY, "status")
+        assert rc == 0
+        state = json.loads(state_file.read_text())
+        assert state["strategies"][0]["parents"] == ["S000"]
+        assert "parent" not in state["strategies"][0]
+
 
 class TestEdgeCases:
     def test_negative_tests(self, isolated_state):
