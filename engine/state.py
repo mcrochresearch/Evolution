@@ -303,7 +303,20 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
     # Determine fitness context for contextual bandit tracking
     context = "low" if prev_fitness < 0.33 else ("mid" if prev_fitness < 0.66 else "high")
 
-    # Update strategy stats
+    # Compute per-round regret BEFORE updating stats to avoid data leakage.
+    # Uses pre-update empirical rates as proxies for true arm means.
+    active_with_data = [s for s in state["strategies"]
+                        if s["status"] != "EXTINCT" and s["attempts"] > 0]
+    chosen_strat = next((s for s in state["strategies"] if s["id"] == strategy_id), None)
+    if active_with_data and chosen_strat and chosen_strat["attempts"] > 0:
+        best_rate = max(s["successes"] / s["attempts"] for s in active_with_data)
+        chosen_rate = chosen_strat["successes"] / chosen_strat["attempts"]
+        round_regret = max(0.0, best_rate - chosen_rate)
+        state["cumulative_regret"] = round(
+            state.get("cumulative_regret", 0.0) + round_regret, 4
+        )
+
+    # Update strategy stats (after regret computation)
     for s in state["strategies"]:
         if s["id"] == strategy_id:
             s["attempts"] += 1
@@ -312,9 +325,12 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
             # Track running average fitness (not ratcheted max)
             prev_avg = s["fitness"]
             s["fitness"] = round(prev_avg + (fitness - prev_avg) / s["attempts"], 4)
-            # PROVEN requires statistically meaningful evidence
-            s["status"] = "PROVEN" if s["successes"] >= MIN_PROVEN_SUCCESSES else s["status"]
-            # Update context-specific stats for contextual Thompson Sampling
+            # PROVEN requires Wilson score confidence, not just raw count
+            if s["attempts"] >= MIN_PROVEN_SUCCESSES:
+                wilson = _wilson_lower(s["successes"], s["attempts"])
+                if wilson >= 0.5:
+                    s["status"] = "PROVEN"
+            # Update context-specific stats
             if "context_stats" not in s:
                 s["context_stats"] = {}
             if context not in s["context_stats"]:
@@ -358,19 +374,6 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
         "surprise": abs(delta) > SURPRISE_THRESHOLD,
         "timestamp": now(),
     })
-
-    # Compute per-round regret: best_arm_rate - chosen_arm_rate
-    # This is the standard metric for bandit algorithm quality
-    active = [s for s in state["strategies"] if s["status"] != "EXTINCT" and s["attempts"] > 0]
-    if active:
-        best_rate = max(s["successes"] / s["attempts"] for s in active)
-        chosen = next((s for s in state["strategies"] if s["id"] == strategy_id), None)
-        if chosen and chosen["attempts"] > 0:
-            chosen_rate = chosen["successes"] / chosen["attempts"]
-            round_regret = max(0.0, best_rate - chosen_rate)
-            state["cumulative_regret"] = round(
-                state.get("cumulative_regret", 0.0) + round_regret, 4
-            )
 
     save_state(state)
     print(json.dumps(cycle_log))
@@ -461,13 +464,13 @@ def cmd_plateau():
         return
 
     recent = history[-PLATEAU_WINDOW:]
-    variance = max(recent) - min(recent)
-    stagnating = variance < PLATEAU_SD_THRESHOLD
+    sd = _sample_sd(recent)
+    stagnating = sd < PLATEAU_SD_THRESHOLD
 
     recommendations = []
     if stagnating:
         recommendations = [
-            "Increase exploration rate to 0.50",
+            "Add new strategies to increase posterior variance (Thompson Sampling explores via uncertainty)",
             "Check graveyard for strategies worth resurrecting",
             "Try the OPPOSITE of your current approach",
             "Decompose the current sub-goal into smaller pieces",
@@ -494,7 +497,7 @@ def cmd_plateau():
 
     print(json.dumps({
         "stagnating": stagnating,
-        "variance": round(variance, 4),
+        "sd": round(sd, 4),
         "consecutive_failures": state["consecutive_failures"],
         "phase": state["phase"],
         "recommendations": recommendations,
@@ -595,8 +598,9 @@ def cmd_cull(max_pop: int = MAX_POPULATION):
         }))
         return
 
-    # Sort by fitness (ascending), cull the weakest
-    active.sort(key=lambda s: s["fitness"])
+    # Sort by Wilson lower bound of success rate (ascending) — statistically
+    # sound culling that accounts for sample size, not just running avg fitness
+    active.sort(key=lambda s: _wilson_lower(s["successes"], s["attempts"]))
     to_cull = len(active) - max_pop
     culled = []
 
@@ -604,8 +608,9 @@ def cmd_cull(max_pop: int = MAX_POPULATION):
         # Don't cull strategies that haven't been tested enough
         if s["attempts"] < 2:
             continue
+        wilson = _wilson_lower(s["successes"], s["attempts"])
         s["status"] = "EXTINCT"
-        s["extinction_reason"] = f"Culled: fitness {s['fitness']:.3f}, population overflow"
+        s["extinction_reason"] = f"Culled: Wilson lower={wilson:.3f}, population overflow"
         s["extinct_at"] = now()
         culled.append(s["id"])
         state["strategies"].remove(s)
