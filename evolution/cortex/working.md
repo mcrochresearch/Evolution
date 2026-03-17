@@ -3,6 +3,11 @@
 > Current session state — the agent's active consciousness.
 > This file is rewritten each cycle to reflect the current situation.
 > It serves as the "prefrontal cortex" — maintaining focus and context.
+>
+> **READ THIS EVERY CYCLE. NOT OPTIONAL. THIS IS YOUR SURVIVAL STATE.**
+> If you don't know what's in this file, you don't know where you are.
+> If you don't know where you are, you can't get to where you need to be.
+> If you can't get to where you need to be, you die.
 
 ## Current State
 
@@ -25,7 +30,7 @@ _Nothing — Evolution has not been initiated._
 _Nothing yet._
 
 ### What I'm About To Do
-_Awaiting activation. Once a goal is received, autonomous execution begins immediately with no further input needed._
+_Awaiting activation. Once a goal is received, autonomous execution begins immediately with no further input needed. Run `./engine/evolve next` to get your orders._
 
 ## Attention Stack
 > Items requiring immediate attention, ordered by priority

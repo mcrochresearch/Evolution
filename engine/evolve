@@ -35,6 +35,11 @@ CMD="${1:-help}"
 shift || true
 
 case "$CMD" in
+    # --- Guided Mode ---
+    next)
+        python3 "$ENGINE_DIR/state.py" next
+        ;;
+
     # --- State Management ---
     init)
         python3 "$ENGINE_DIR/state.py" init "$@"
@@ -287,6 +292,7 @@ case "$CMD" in
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
         echo ""
+        echo "Guided:      next              (engine tells you exactly what to do)"
         echo "State:       init | status | select | cycle | add-strategy | extinct | mutate"
         echo "             crossover | cull | resurrect | crystallize | reset | export | import"
         echo "Fitness:     fitness"

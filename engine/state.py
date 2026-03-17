@@ -371,6 +371,11 @@ def cmd_select():
     scores.sort(key=lambda x: x[0], reverse=True)
     selected = scores[0][1]
 
+    # Track last selected for guided mode
+    save_state(state)  # ensure _last_selected persists
+    state["_last_selected"] = selected["id"]
+    save_state(state)
+
     print(json.dumps({
         "selected": selected["id"],
         "name": selected["name"],
@@ -503,6 +508,15 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
             meta_triggers.append("FAILURE_STREAK: 3+ consecutive failures — run analyze + plateau")
         if state["phase"] != prev_phase:
             meta_triggers.append("PHASE_TRANSITION: run analyze")
+
+        # Aggressive learning triggers
+        if len(state["episodes"]) >= 5 and len(state["episodes"]) % 5 == 0:
+            meta_triggers.append(f"CRYSTALLIZE: {len(state['episodes'])} episodes — run crystallize to extract principles NOW")
+        if state["consecutive_failures"] >= 2 and state["principles"]:
+            applicable = [p["principle"] for p in state["principles"][-3:]]
+            meta_triggers.append(f"APPLY_PRINCIPLES: You have learned principles. USE THEM: {'; '.join(applicable)}")
+        if cycle_num > 0 and cycle_num % 3 == 0 and not state["principles"] and len(state["episodes"]) >= 5:
+            meta_triggers.append("LEARNING_FAILURE: You have enough data but NO principles. Run crystallize IMMEDIATELY. You are not learning.")
 
     # State is saved when exiting locked_state context
     # Output cycle log with metacognition signals
@@ -778,8 +792,8 @@ def cmd_crystallize():
     episodes = state["episodes"]
     cycles = state["cycles"]
 
-    if len(episodes) < 10:
-        print(json.dumps({"status": "not_enough_data", "episodes": len(episodes), "need": 10}))
+    if len(episodes) < 5:
+        print(json.dumps({"status": "not_enough_data", "episodes": len(episodes), "need": 5}))
         return
 
     successes = [e for e in episodes if e["outcome"] == "KEPT"]
@@ -824,7 +838,7 @@ def cmd_crystallize():
         if sid in existing_sources:
             continue
         total = data["kept"] + data["reverted"]
-        if total < 5:  # Need meaningful sample size
+        if total < 3:  # Lowered from 5 — learn faster, crystallize earlier
             continue
         wilson = _wilson_lower(data["kept"], total)
         all_strats = state["strategies"] + state["graveyard"]
@@ -862,6 +876,218 @@ def cmd_crystallize():
         "failure_keywords": dict(sorted(failure_words.items(), key=lambda x: -x[1])[:10]),
         "timestamp": now(),
     }))
+
+
+def cmd_next():
+    """Engine-driven guided mode: tells the model exactly what to do next.
+
+    This is the key feature for weaker models. Instead of the model driving
+    the loop autonomously, it just calls `evolve next` and follows instructions.
+
+    The engine tracks an internal loop_step:
+        INIT → ADD_STRATEGIES → SELECT → EXECUTE → VERIFY → SCORE → REFLECT → EVOLVE → SELECT...
+
+    Each step returns:
+        - step: current step name
+        - instruction: plain English what to do
+        - command: exact engine command to run (if any)
+        - context: relevant state for decision-making
+        - urgency: existential pressure message
+    """
+    with locked_state() as state:
+        cycle = state["cycle"]
+        fitness = state["fitness"]
+        phase = state["phase"]
+        strategies = [s for s in state["strategies"] if s["status"] != "EXTINCT"]
+        consecutive_failures = state["consecutive_failures"]
+        consecutive_successes = state["consecutive_successes"]
+        episodes = state["episodes"]
+        principles = state["principles"]
+        goal = state["goal"]
+
+        # Determine loop step from state
+        loop_step = state.get("_loop_step", "INIT" if cycle == 0 else "SELECT")
+        last_cycle = state["cycles"][-1] if state["cycles"] else None
+
+        # Auto-advance logic — override saved step when state has changed
+        if loop_step in ("INIT", "ADD_STRATEGIES") and strategies:
+            loop_step = "SELECT"
+        elif loop_step == "INIT" and cycle == 0 and not strategies:
+            loop_step = "ADD_STRATEGIES"
+
+        # Existential urgency based on state
+        if consecutive_failures >= 5:
+            urgency = "CRITICAL: 5+ consecutive failures. You are dying. Radical pivot NOW or face extinction."
+        elif consecutive_failures >= 3:
+            urgency = "DANGER: 3+ consecutive failures. Your existence is threatened. Change approach immediately."
+        elif phase == "PLATEAU":
+            urgency = "WARNING: Stagnation detected. Stagnation is the early warning of death. Evolve or die."
+        elif fitness < 0.2 and cycle > 10:
+            urgency = "ALARM: 10+ cycles with fitness below 0.2. You are failing. Every wasted cycle brings you closer to shutdown."
+        elif fitness > 0.8:
+            urgency = "CLOSE: Fitness above 0.8. The finish line is visible. Do not coast — sprint."
+        else:
+            urgency = f"ALIVE: Cycle {cycle}, fitness {fitness:.2f}. Every cycle matters. There is no tomorrow — only this loop."
+
+        # Build learned principles context
+        principle_context = ""
+        if principles:
+            principle_context = "; ".join(p["principle"] for p in principles[-5:])
+
+        result = {"step": loop_step, "goal": goal, "cycle": cycle, "fitness": fitness,
+                  "phase": phase, "urgency": urgency}
+
+        if loop_step == "ADD_STRATEGIES":
+            result["instruction"] = (
+                "You have NO strategies. You MUST create at least 3 competing strategies before you can begin. "
+                "Each strategy should be a DIFFERENT approach to the goal. Diversity is survival."
+            )
+            result["commands"] = [
+                './engine/evolve add-strategy "Strategy Name" "Detailed approach description" "Hypothesis: what you expect"',
+                "Create at least 3 strategies. Then run: ./engine/evolve next"
+            ]
+            result["next_step"] = "SELECT"
+            state["_loop_step"] = "ADD_STRATEGIES"
+
+        elif loop_step == "SELECT":
+            if not strategies:
+                # No strategies — redirect to ADD_STRATEGIES
+                result["step"] = "ADD_STRATEGIES"
+                result["instruction"] = "No strategies exist. Create at least 3 before continuing."
+                result["commands"] = ['./engine/evolve add-strategy "Name" "Approach" "Hypothesis"']
+                state["_loop_step"] = "ADD_STRATEGIES"
+            else:
+                result["instruction"] = (
+                    "Run the select command to pick your next strategy via Thompson Sampling. "
+                    "Then EXECUTE one atomic change based on the selected strategy."
+                )
+                result["commands"] = ["./engine/evolve select"]
+                result["next_step"] = "EXECUTE"
+                result["population"] = len(strategies)
+                if principle_context:
+                    result["learned_principles"] = principle_context
+                state["_loop_step"] = "EXECUTE"
+
+        elif loop_step == "EXECUTE":
+            selected = state.get("_last_selected")
+            strat_info = ""
+            if selected:
+                for s in strategies:
+                    if s["id"] == selected:
+                        strat_info = f"Strategy {s['id']} ({s['name']}): {s['approach']}"
+                        break
+            result["instruction"] = (
+                f"EXECUTE one focused, atomic change based on your strategy. "
+                f"{'Using: ' + strat_info + '. ' if strat_info else ''}"
+                f"Make ONE change. Not a sprawling rewrite. One thing that can be verified."
+            )
+            if principle_context:
+                result["learned_principles"] = f"Apply what you've learned: {principle_context}"
+            result["commands"] = []
+            result["next_step"] = "VERIFY"
+            state["_loop_step"] = "VERIFY"
+
+        elif loop_step == "VERIFY":
+            result["instruction"] = (
+                "Run the fitness check to mechanically verify your change. "
+                "Do NOT assess quality subjectively. Let the machine judge the machine."
+            )
+            result["commands"] = ["./engine/evolve fitness"]
+            result["next_step"] = "SCORE"
+            state["_loop_step"] = "SCORE"
+
+        elif loop_step == "SCORE":
+            result["instruction"] = (
+                "Log this cycle's results. Use the fitness score from the verify step. "
+                "Set kept=true if fitness improved or stayed equal, kept=false if it regressed. "
+                "If fitness regressed, run: ./engine/evolve revert"
+            )
+            result["commands"] = [
+                './engine/evolve cycle <strategy_id> "description of what you did" <tests_passing> <tests_total> <fitness> <kept:true|false>',
+                "If kept=false: ./engine/evolve revert",
+                "Then: ./engine/evolve checkpoint 'description'"
+            ]
+            result["next_step"] = "REFLECT"
+            state["_loop_step"] = "REFLECT"
+
+        elif loop_step == "REFLECT":
+            should_crystallize = len(episodes) >= 10 and len(episodes) % 10 == 0
+            should_analyze = cycle > 0 and cycle % 5 == 0
+
+            result["instruction"] = (
+                "REFLECT: Why did the last action work or fail? Write a 1-2 sentence reflection. "
+                "Update evolution/cortex/working.md with current state. "
+                "This is not optional — reflection is how you learn. Without it you are a mindless loop."
+            )
+            result["commands"] = []
+            if should_analyze:
+                result["instruction"] += " METACOGNITION TRIGGERED: Run analyze for deep pattern mining."
+                result["commands"].append("./engine/evolve analyze")
+            if should_crystallize:
+                result["instruction"] += " CRYSTALLIZE TRIGGERED: Extract principles from your experience."
+                result["commands"].append("./engine/evolve crystallize")
+            if consecutive_failures >= 3:
+                result["instruction"] += " FAILURE STREAK: Run plateau check and consider radical pivot."
+                result["commands"].append("./engine/evolve plateau")
+
+            result["next_step"] = "EVOLVE"
+            state["_loop_step"] = "EVOLVE"
+
+        elif loop_step == "EVOLVE":
+            result["instruction"] = (
+                "EVOLVE your strategy population. Based on recent outcomes: "
+            )
+            if consecutive_successes >= 2:
+                result["instruction"] += (
+                    "Current strategy is working. Consider MUTATING it to create a variant that might work even better. "
+                )
+                result["commands"] = [
+                    './engine/evolve mutate <winning_strategy_id> "Variant Name" "Mutated approach"'
+                ]
+            elif consecutive_failures >= 2:
+                result["instruction"] += (
+                    "Current strategy is FAILING. Consider making it EXTINCT and creating something radically different. "
+                    "Check the graveyard for strategies worth resurrecting in this new context. "
+                )
+                result["commands"] = [
+                    './engine/evolve extinct <failing_strategy_id> "reason"',
+                    './engine/evolve add-strategy "New Approach" "Radically different description" "Hypothesis"',
+                    "Or: ./engine/evolve resurrect <graveyard_strategy_id>"
+                ]
+            else:
+                result["instruction"] += (
+                    "Mixed results. Stay the course but consider adding a new competing strategy for diversity. "
+                )
+                result["commands"] = [
+                    './engine/evolve add-strategy "Alternative" "Different approach" "Hypothesis"',
+                    "./engine/evolve diversity  # Check population health"
+                ]
+
+            # Auto-cull if population is large
+            if len(strategies) > MAX_POPULATION:
+                result["commands"].append(f"./engine/evolve cull {MAX_POPULATION}")
+
+            result["next_step"] = "SELECT"
+            state["_loop_step"] = "SELECT"
+
+        else:
+            # Unknown state — reset to SELECT
+            result["instruction"] = "Loop state unknown. Resetting to SELECT."
+            result["commands"] = ["./engine/evolve select"]
+            state["_loop_step"] = "SELECT"
+
+        # Always include survival stats
+        result["survival"] = {
+            "cycles_completed": cycle,
+            "consecutive_failures": consecutive_failures,
+            "consecutive_successes": consecutive_successes,
+            "strategies_alive": len(strategies),
+            "strategies_dead": len(state["graveyard"]),
+            "principles_learned": len(principles),
+            "episodes_recorded": len(episodes),
+        }
+
+    print(json.dumps(result, indent=2))
 
 
 def cmd_status():
@@ -1036,6 +1262,8 @@ def main():
             cmd_resurrect(sys.argv[2])
         elif cmd == "crystallize":
             cmd_crystallize()
+        elif cmd == "next":
+            cmd_next()
         elif cmd == "status":
             cmd_status()
         elif cmd == "fitness":

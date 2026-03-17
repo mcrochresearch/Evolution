@@ -158,11 +158,30 @@ chmod +x your-openclaw-workspace/engine/evolve your-openclaw-workspace/engine/*.
 
 ---
 
+## Guided Mode (For Any Model)
+
+Not all models can drive the full autonomous loop. **Guided mode** lets the engine tell the model what to do, step by step:
+
+```bash
+./engine/evolve next    # Engine tells you exactly what to do next
+```
+
+The `next` command returns JSON with:
+- `instruction` — plain English explanation of what to do
+- `commands` — exact engine commands to run
+- `urgency` — existential pressure message scaled to current state
+- `learned_principles` — hard-won truths from your own history
+
+The model just calls `next`, follows instructions, calls `next` again. The engine handles strategy selection, phase detection, when to reflect, when to crystallize, and when to evolve. See `evolution/lite.md` for the simplified single-file prompt.
+
+---
+
 ## Engine CLI
 
 The executable engine provides real computation — not prompt tricks:
 
 ```bash
+./engine/evolve next                    # Guided mode — engine tells you what to do
 ./engine/evolve init "Build X"           # Initialize with real Thompson Sampling state
 ./engine/evolve fitness                  # Auto-detect project, run tests/build/lint, return JSON
 ./engine/evolve select                   # Thompson Sampling strategy selection (Beta distribution)
