@@ -339,7 +339,7 @@ class TestExportImport:
         run_cmd(STATE_PY, "cycle", "S001", "try", "3", "5", "0.6", "true")
         out, _ = run_cmd(STATE_PY, "export")
         exported = json.dumps(out)
-        run_cmd(STATE_PY, "reset")
+        run_cmd(STATE_PY, "reset", "--force")
         out2, rc2 = run_cmd(STATE_PY, "import", stdin_data=exported)
         assert rc2 == 0
         assert out2["status"] == "imported"

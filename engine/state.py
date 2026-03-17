@@ -132,6 +132,56 @@ def save_state(state: dict):
         _release_lock(lock_fd)
 
 
+class locked_state:
+    """Context manager for atomic read-modify-write with file locking.
+
+    Prevents TOCTOU races by holding the lock from load through save:
+        with locked_state() as state:
+            state["cycle"] += 1
+            # ... modify state ...
+        # auto-saved on exit
+    """
+
+    def __init__(self):
+        self._lock_fd = None
+        self._state = None
+
+    def __enter__(self) -> dict:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self._lock_fd = _acquire_lock()
+        if not STATE_FILE.exists():
+            _release_lock(self._lock_fd)
+            print(json.dumps({"error": "No evolution state found. Run 'init' first."}))
+            sys.exit(1)
+        with open(STATE_FILE) as f:
+            self._state = json.load(f)
+        return self._state
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type is None and self._state is not None:
+                # Trim unbounded arrays
+                for key in ("fitness_history", "cycles", "episodes"):
+                    if key in self._state and len(self._state[key]) > MAX_HISTORY:
+                        self._state[key] = self._state[key][-MAX_HISTORY:]
+                # Atomic write
+                fd, tmp_path = tempfile.mkstemp(dir=STATE_DIR, suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w") as f:
+                        json.dump(self._state, f, indent=2)
+                    os.replace(tmp_path, STATE_FILE)
+                except Exception:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+        finally:
+            if self._lock_fd:
+                _release_lock(self._lock_fd)
+        return False
+
+
 # ============================================================================
 # VALIDATION
 # ============================================================================
@@ -286,128 +336,126 @@ def cmd_select():
 
 def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
               tests_total: int, fitness: float, kept: bool):
-    """Log a completed cycle with full validation."""
-    state = load_state()
+    """Log a completed cycle with full validation.
 
-    # Validate inputs
+    Uses locked_state for atomic read-modify-write (prevents TOCTOU races).
+    """
+    # Validate inputs before acquiring lock (these may exit)
     validate_fitness(fitness)
     validate_tests(tests_passing, tests_total)
-    validate_strategy_id(state, strategy_id)
 
-    state["cycle"] += 1
-    cycle_num = state["cycle"]
+    # Atomic read-modify-write under lock (prevents TOCTOU races)
+    with locked_state() as state:
+        validate_strategy_id(state, strategy_id)
 
-    prev_fitness = state["fitness"]
-    delta = fitness - prev_fitness
-    state["fitness"] = fitness
-    state["fitness_history"].append(fitness)
+        state["cycle"] += 1
+        cycle_num = state["cycle"]
 
-    # Determine fitness context for contextual bandit tracking
-    context = "low" if prev_fitness < 0.33 else ("mid" if prev_fitness < 0.66 else "high")
+        prev_fitness = state["fitness"]
+        delta = fitness - prev_fitness
+        state["fitness"] = fitness
+        state["fitness_history"].append(fitness)
 
-    # Compute per-round regret BEFORE updating stats to avoid data leakage.
-    # Uses pre-update empirical rates as proxies for true arm means.
-    active_with_data = [s for s in state["strategies"]
-                        if s["status"] != "EXTINCT" and s["attempts"] > 0]
-    chosen_strat = next((s for s in state["strategies"] if s["id"] == strategy_id), None)
-    if active_with_data and chosen_strat and chosen_strat["attempts"] > 0:
-        best_rate = max(s["successes"] / s["attempts"] for s in active_with_data)
-        chosen_rate = chosen_strat["successes"] / chosen_strat["attempts"]
-        round_regret = max(0.0, best_rate - chosen_rate)
-        state["cumulative_regret"] = round(
-            state.get("cumulative_regret", 0.0) + round_regret, 4
-        )
+        # Determine fitness context for contextual bandit tracking
+        context = "low" if prev_fitness < 0.33 else ("mid" if prev_fitness < 0.66 else "high")
 
-    # Update strategy stats (after regret computation)
-    for s in state["strategies"]:
-        if s["id"] == strategy_id:
-            s["attempts"] += 1
-            if kept:
-                s["successes"] += 1
-            # Track running average fitness (not ratcheted max)
-            prev_avg = s["fitness"]
-            s["fitness"] = round(prev_avg + (fitness - prev_avg) / s["attempts"], 4)
-            # PROVEN requires Wilson score confidence, not just raw count
-            if s["attempts"] >= MIN_PROVEN_SUCCESSES:
-                wilson = _wilson_lower(s["successes"], s["attempts"])
-                if wilson >= 0.5:
-                    s["status"] = "PROVEN"
-            # Update context-specific stats
-            if "context_stats" not in s:
-                s["context_stats"] = {}
-            if context not in s["context_stats"]:
-                s["context_stats"][context] = {"attempts": 0, "successes": 0}
-            s["context_stats"][context]["attempts"] += 1
-            if kept:
-                s["context_stats"][context]["successes"] += 1
-            break
+        # Compute per-round regret BEFORE updating stats to avoid data leakage
+        active_with_data = [s for s in state["strategies"]
+                            if s["status"] != "EXTINCT" and s["attempts"] > 0]
+        chosen_strat = next((s for s in state["strategies"] if s["id"] == strategy_id), None)
+        if active_with_data and chosen_strat and chosen_strat["attempts"] > 0:
+            best_rate = max(s["successes"] / s["attempts"] for s in active_with_data)
+            chosen_rate = chosen_strat["successes"] / chosen_strat["attempts"]
+            round_regret = max(0.0, best_rate - chosen_rate)
+            state["cumulative_regret"] = round(
+                state.get("cumulative_regret", 0.0) + round_regret, 4
+            )
 
-    # Track consecutive outcomes
-    if kept:
-        state["consecutive_successes"] += 1
-        state["consecutive_failures"] = 0
-    else:
-        state["consecutive_failures"] += 1
-        state["consecutive_successes"] = 0
+        # Update strategy stats (after regret computation)
+        for s in state["strategies"]:
+            if s["id"] == strategy_id:
+                s["attempts"] += 1
+                if kept:
+                    s["successes"] += 1
+                prev_avg = s["fitness"]
+                s["fitness"] = round(prev_avg + (fitness - prev_avg) / s["attempts"], 4)
+                # PROVEN requires Wilson score confidence, not just raw count
+                if s["attempts"] >= MIN_PROVEN_SUCCESSES:
+                    wilson = _wilson_lower(s["successes"], s["attempts"])
+                    if wilson >= 0.5:
+                        s["status"] = "PROVEN"
+                # Update context-specific stats
+                if "context_stats" not in s:
+                    s["context_stats"] = {}
+                if context not in s["context_stats"]:
+                    s["context_stats"][context] = {"attempts": 0, "successes": 0}
+                s["context_stats"][context]["attempts"] += 1
+                if kept:
+                    s["context_stats"][context]["successes"] += 1
+                break
 
-    # Detect phase transitions
-    prev_phase = state["phase"]
-    state["phase"] = detect_phase(state)
+        # Track consecutive outcomes
+        if kept:
+            state["consecutive_successes"] += 1
+            state["consecutive_failures"] = 0
+        else:
+            state["consecutive_failures"] += 1
+            state["consecutive_successes"] = 0
 
-    # Log cycle
-    cycle_log = {
-        "cycle": cycle_num,
-        "strategy": strategy_id,
-        "action": action,
-        "tests_passing": tests_passing,
-        "tests_total": tests_total,
-        "fitness": fitness,
-        "delta": round(delta, 4),
-        "kept": kept,
-        "timestamp": now(),
-    }
-    state["cycles"].append(cycle_log)
+        # Detect phase transitions
+        prev_phase = state["phase"]
+        state["phase"] = detect_phase(state)
 
-    # Adaptive surprise threshold: scales with recent variance so early
-    # exploration (high variance) has a higher bar for "surprising" and
-    # late refinement (low variance) flags smaller deviations.
-    history = state["fitness_history"]
-    if len(history) >= 5:
-        recent_sd = _sample_sd(history[-5:])
-        surprise_threshold = max(SURPRISE_BASELINE, 2 * recent_sd)
-    else:
-        surprise_threshold = SURPRISE_BASELINE
-    is_surprise = abs(delta) > surprise_threshold
+        # Log cycle
+        cycle_log = {
+            "cycle": cycle_num,
+            "strategy": strategy_id,
+            "action": action,
+            "tests_passing": tests_passing,
+            "tests_total": tests_total,
+            "fitness": fitness,
+            "delta": round(delta, 4),
+            "kept": kept,
+            "timestamp": now(),
+        }
+        state["cycles"].append(cycle_log)
 
-    # Log episode
-    state["episodes"].append({
-        "cycle": cycle_num,
-        "action": action,
-        "outcome": "KEPT" if kept else "REVERTED",
-        "fitness": fitness,
-        "surprise": is_surprise,
-        "timestamp": now(),
-    })
+        # Adaptive surprise threshold: scales with recent variance
+        history = state["fitness_history"]
+        if len(history) >= 5:
+            recent_sd = _sample_sd(history[-5:])
+            surprise_threshold = max(SURPRISE_BASELINE, 2 * recent_sd)
+        else:
+            surprise_threshold = SURPRISE_BASELINE
+        is_surprise = abs(delta) > surprise_threshold
 
-    # Cycle budget check (alignment safeguard)
-    max_cycles = state.get("max_cycles", MAX_CYCLES_DEFAULT)
-    budget_warning = None
-    if max_cycles > 0 and cycle_num >= max_cycles:
-        budget_warning = f"Cycle budget ({max_cycles}) reached. Mandatory human review required."
+        # Log episode
+        state["episodes"].append({
+            "cycle": cycle_num,
+            "action": action,
+            "outcome": "KEPT" if kept else "REVERTED",
+            "fitness": fitness,
+            "surprise": is_surprise,
+            "timestamp": now(),
+        })
 
-    # Event-triggered metacognition recommendations
-    # (replaces fixed 5-cycle schedule with signal-driven analysis)
-    meta_triggers = []
-    if is_surprise:
-        meta_triggers.append("SURPRISE: unexpected outcome — run analyze")
-    if state["consecutive_failures"] >= 3:
-        meta_triggers.append("FAILURE_STREAK: 3+ consecutive failures — run analyze + plateau")
-    if state["phase"] != prev_phase:
-        meta_triggers.append("PHASE_TRANSITION: run analyze")
+        # Cycle budget check (alignment safeguard)
+        max_cycles = state.get("max_cycles", MAX_CYCLES_DEFAULT)
+        budget_warning = None
+        if max_cycles > 0 and cycle_num >= max_cycles:
+            budget_warning = f"Cycle budget ({max_cycles}) reached. Mandatory human review required."
 
-    save_state(state)
+        # Event-triggered metacognition
+        meta_triggers = []
+        if is_surprise:
+            meta_triggers.append("SURPRISE: unexpected outcome — run analyze")
+        if state["consecutive_failures"] >= 3:
+            meta_triggers.append("FAILURE_STREAK: 3+ consecutive failures — run analyze + plateau")
+        if state["phase"] != prev_phase:
+            meta_triggers.append("PHASE_TRANSITION: run analyze")
 
-    # Enhance cycle log with metacognition signals
+    # State is saved when exiting locked_state context
+    # Output cycle log with metacognition signals
     cycle_log["surprise"] = is_surprise
     if meta_triggers:
         cycle_log["meta_triggers"] = meta_triggers
@@ -829,11 +877,14 @@ def cmd_status():
     print(json.dumps(dashboard, indent=2))
 
 
-def cmd_reset():
-    """Clear all evolution state. Destructive — requires confirmation."""
+def cmd_reset(force: bool = False):
+    """Clear all evolution state. Destructive — requires --force flag."""
+    if not force:
+        print(json.dumps({"error": "Reset is destructive. Pass --force to confirm."}))
+        sys.exit(1)
     if STATE_FILE.exists():
         STATE_FILE.unlink()
-    checkpoints = STATE_DIR / "checkpoints.jsonl"
+    checkpoints = STATE_DIR / "checkpoints.json"
     if checkpoints.exists():
         checkpoints.unlink()
     skill_reg = STATE_DIR / "skill-registry.json"
@@ -934,7 +985,7 @@ def main():
             state = load_state()
             print(json.dumps({"fitness": state["fitness"], "history": state["fitness_history"][-20:]}))
         elif cmd == "reset":
-            cmd_reset()
+            cmd_reset(force="--force" in sys.argv)
         elif cmd == "export":
             cmd_export()
         elif cmd == "import":

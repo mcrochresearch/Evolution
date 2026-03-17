@@ -70,7 +70,7 @@ case "$CMD" in
         python3 "$ENGINE_DIR/state.py" crystallize
         ;;
     reset)
-        python3 "$ENGINE_DIR/state.py" reset
+        python3 "$ENGINE_DIR/state.py" reset "$@"
         ;;
     export)
         python3 "$ENGINE_DIR/state.py" export

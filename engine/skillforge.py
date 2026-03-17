@@ -49,7 +49,7 @@ def load_registry():
     if REGISTRY.exists():
         with open(REGISTRY) as f:
             return json.load(f)
-    return {"skills": [], "promoted": [], "version": 2}
+    return {"skills": [], "promoted": [], "version": 2, "next_skill_id": 1}
 
 
 def save_registry(registry):
@@ -118,7 +118,10 @@ def cmd_extract(name: str, description: str, steps: list, trigger: str = ""):
         }))
         return
 
-    skill_id = f"SK{len(registry['skills']) + 1:03d}"
+    # Monotonic skill ID (survives deletions, prevents collisions)
+    sid_num = registry.get("next_skill_id", len(registry["skills"]) + 1)
+    skill_id = f"SK{sid_num:03d}"
+    registry["next_skill_id"] = sid_num + 1
 
     # Create the skill file
     _write_skill_file(name, description, steps, trigger, skill_id, 1)
@@ -200,7 +203,7 @@ def cmd_use(skill_id: str, success: bool):
     skill = find_skill_by_id(registry, skill_id)
     if not skill:
         print(json.dumps({"error": f"Skill {skill_id} not found"}))
-        return
+        sys.exit(1)
 
     skill["times_used"] += 1
     if success:

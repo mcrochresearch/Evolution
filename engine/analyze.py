@@ -24,11 +24,13 @@ Usage:
 
 import json
 import math
+import os
 import sys
 from pathlib import Path
 from collections import Counter
 
-STATE_FILE = Path("evolution/.state/evolution.json")
+STATE_DIR = Path(os.environ.get("EVOLUTION_STATE_DIR", "evolution/.state"))
+STATE_FILE = STATE_DIR / "evolution.json"
 
 # --- Named Constants ---
 MIN_CYCLES_FOR_PATTERNS = 5
