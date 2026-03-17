@@ -50,9 +50,33 @@ Evolution has an executable engine. Use these commands via Bash:
 ./engine/evolve skill-list
 ./engine/evolve skill-promote "SK001"
 
+# Cortex Memory (persistent hybrid memory engine)
+./engine/evolve mem-store <type> <content> [--context X] [--tags a,b] [--files a,b] [--importance N]
+./engine/evolve mem-recall <query> [--type X] [--limit N]  # Hybrid: FTS5 + TF-IDF + graph + time decay
+./engine/evolve mem-core                       # Get top memories (always load on session start)
+./engine/evolve mem-core --refresh             # Write core memory to evolution/cortex/core-memory.md
+./engine/evolve mem-checkpoint --goal "..." --strategy "S001" --cycle N --fitness 0.XX
+./engine/evolve mem-resume                     # Load last checkpoint
+./engine/evolve mem-consolidate                # Deduplicate, decay, merge similar memories
+./engine/evolve mem-stats                      # Memory system statistics
+./engine/evolve memory invalidate <id> [--superseded-by <id>]  # Temporal invalidation
+./engine/evolve memory relate <id1> <id2> <relation>  # Create typed relationship
+./engine/evolve memory gc                      # Garbage collect expired low-value memories
+
+# Memory types: decision, bug-fix, pattern, architecture, preference, debug, insight, warning, procedure, goal-outcome
+# Relation types: supersedes, contradicts, supports, related, depends-on, caused-by, fixes
+
 # Guard (mechanical anti-pattern detection)
 ./engine/evolve guard                          # Scan diff for anti-patterns
 ./engine/evolve test-count HEAD~1 HEAD         # Verify test count didn't drop
+
+# Foresight (adversarial debate & scenario planning)
+./engine/evolve debate "<goal>" '<state_json>' '<strategies_json>'  # Generate debate prompt
+./engine/evolve premortem "<plan>" [goal] [state_json]              # Premortem: imagine failure
+./engine/evolve backcast "<desired_outcome>" '<state_json>' [goal]  # Work backwards from success
+./engine/evolve forecast-eval '<scenarios_json>'                    # Score & rank scenarios
+./engine/evolve forecast-accuracy                                   # Check prediction accuracy
+./engine/evolve foresight log "<type>" '<data_json>'               # Log prediction for tracking
 
 # Audit (independent tamper-evident log)
 ./engine/evolve audit log "cycle" '{"data":1}' # Log event
@@ -73,7 +97,9 @@ Evolution has an executable engine. Use these commands via Bash:
 1. **Parse the goal** from the user's message. If the goal is ambiguous, interpret it in the most actionable way possible and begin. Do not ask for clarification — make a decision and execute.
 2. **Initialize engine**: Run `./engine/evolve init "the goal"` to create JSON state.
 3. **Check for existing state**: Read `evolution/cortex/working.md`. If it exists, you're resuming — load it and `evolution/nucleus/goal.md` to restore context.
-4. **If fresh start**: Create the `evolution/` directory structure. Write the goal to `evolution/nucleus/goal.md`. Auto-detect project type and set up fitness commands.
+4. **Load persistent memory**: Run `./engine/evolve mem-core` to load core memories (decisions, patterns, warnings from previous sessions). Run `./engine/evolve mem-resume` to check for a session checkpoint. If a checkpoint exists, resume from where you left off.
+5. **Recall relevant memories**: Run `./engine/evolve mem-recall "<goal keywords>"` to find any memories from previous sessions that are relevant to this goal.
+6. **If fresh start**: Create the `evolution/` directory structure. Write the goal to `evolution/nucleus/goal.md`. Auto-detect project type and set up fitness commands.
 
 ## GOAL DECOMPOSITION
 
@@ -99,8 +125,17 @@ UPDATE   → Write working.md + cycle.md. Every 5 cycles: run analyze.
 REPEAT
 ```
 
-### SELECT
-Run `./engine/evolve select` — **Contextual Thompson Sampling** (Beta distribution with fitness-level context). Strategies track success rates per context bucket (low/mid/high fitness), so selection adapts to the current situation. A strategy that works at low fitness may not work at high fitness. Seeds are logged for full reproducibility. Cumulative regret is tracked as the gold-standard bandit performance metric.
+### SELECT (with Foresight)
+Run `./engine/evolve select` — **Contextual Thompson Sampling** (Beta distribution with fitness-level context). Strategies track success rates per context bucket (low/mid/high fitness), so selection adapts to the current situation. Seeds are logged for reproducibility. Cumulative regret is tracked.
+
+**Before executing the selected strategy**, run Foresight at key moments:
+
+- **Every 5 cycles OR after a phase transition**: Run a full debate. Use `./engine/evolve debate` to generate the debate prompt, then argue Blue Team vs Red Team for each available strategy. Fill in scenario templates, then evaluate with `./engine/evolve forecast-eval`.
+- **Before any major pivot**: Run a premortem on the proposed plan. Use `./engine/evolve premortem` to imagine the plan failing. Fix the plan based on what you discover.
+- **When stuck (3+ failures)**: Run a backcast. Use `./engine/evolve backcast` to work backwards from the desired end state. This reveals the critical path you should be on.
+- **After every debate**: Log the prediction with `./engine/evolve foresight log "debate_outcome" '{"chosen_strategy":"SXXX","predicted_gain":0.XX,"cycle":N}'`. After seeing actual results, log `./engine/evolve foresight log "actual_outcome" '{"strategy":"SXXX","actual_gain":0.XX,"cycle":N}'` to track prediction accuracy.
+
+The point: **don't just execute — think first.** See the future, find the fastest path, anticipate failures before they happen.
 
 ### EXECUTE
 - **One change per cycle.** Never bundle unrelated changes.
@@ -166,6 +201,20 @@ The engine outputs `meta_triggers` in cycle results when analysis is needed:
 - Run `./engine/evolve crystallize` to extract principles
 - If solution is reusable: `./engine/evolve skill-extract "name" "desc" '["steps"]'`
 - Run `./engine/evolve skill-stats` — auto-promote qualified skills
+- **Store memories**: For every significant learning, decision, or bug fix — store it:
+  - `./engine/evolve mem-store decision "chose X over Y because Z" --importance 0.8 --tags "topic"`
+  - `./engine/evolve mem-store bug-fix "error X caused by Y, fixed with Z" --files "path/to/file" --importance 0.7`
+  - `./engine/evolve mem-store pattern "approach X works well for problem Y" --importance 0.8`
+  - `./engine/evolve mem-store warning "never do X because Y" --importance 0.9`
+- **Save checkpoint**: `./engine/evolve mem-checkpoint --goal "..." --strategy "SXXX" --cycle N --fitness 0.XX`
+
+**Every 10 cycles** (memory maintenance):
+- Run `./engine/evolve mem-consolidate` to deduplicate and decay old memories
+- Run `./engine/evolve mem-core --refresh` to regenerate the core memory file
+
+**On session end or goal completion**:
+- Store a goal-outcome memory: `./engine/evolve mem-store goal-outcome "Goal X: achieved/failed. Key learnings: ..." --importance 0.9`
+- Run `./engine/evolve mem-consolidate` for final cleanup
 
 ---
 
@@ -175,13 +224,17 @@ The engine outputs `meta_triggers` in cycle results when analysis is needed:
 
 | When | Read | Write |
 |------|------|-------|
+| Session start | mem-core, mem-resume, mem-recall | |
 | Every cycle | working.md, goal.md | working.md, cycle.md |
 | Selecting strategy | + population.md | |
-| After failure | + graveyard.md, reflections.md | reflections.md |
+| After failure | + graveyard.md, reflections.md, mem-recall | reflections.md |
 | Every 5 cycles | + episodic.md, patterns.md | episodic.md, patterns.md |
-| On milestone | + semantic.md, procedural.md | semantic.md, procedural.md |
-| When stuck | + frontiers.md, hypotheses.md | hypotheses.md |
+| Every 10 cycles | | mem-consolidate, mem-core --refresh |
+| On milestone | + semantic.md, procedural.md | semantic.md, procedural.md, mem-store |
+| When stuck | + frontiers.md, hypotheses.md, mem-recall | hypotheses.md |
 | On pivot | + graveyard.md (resurrect?) | population.md |
+| On learning | | mem-store (decision/pattern/warning/bug-fix) |
+| On session end | | mem-store goal-outcome, mem-checkpoint, mem-consolidate |
 
 ---
 

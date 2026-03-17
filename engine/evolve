@@ -141,6 +141,52 @@ case "$CMD" in
         python3 "$ENGINE_DIR/skillforge.py" stats
         ;;
 
+    # --- Memory (Cortex) ---
+    memory)
+        python3 "$ENGINE_DIR/memory.py" "$@"
+        ;;
+    mem-store)
+        python3 "$ENGINE_DIR/memory.py" store "$@"
+        ;;
+    mem-recall)
+        python3 "$ENGINE_DIR/memory.py" recall "$@"
+        ;;
+    mem-core)
+        python3 "$ENGINE_DIR/memory.py" core "$@"
+        ;;
+    mem-checkpoint)
+        python3 "$ENGINE_DIR/memory.py" checkpoint "$@"
+        ;;
+    mem-resume)
+        python3 "$ENGINE_DIR/memory.py" resume
+        ;;
+    mem-consolidate)
+        python3 "$ENGINE_DIR/memory.py" consolidate
+        ;;
+    mem-stats)
+        python3 "$ENGINE_DIR/memory.py" stats
+        ;;
+
+    # --- Foresight (debate & scenario planning) ---
+    foresight)
+        python3 "$ENGINE_DIR/foresight.py" "$@"
+        ;;
+    debate)
+        python3 "$ENGINE_DIR/foresight.py" debate "$@"
+        ;;
+    premortem)
+        python3 "$ENGINE_DIR/foresight.py" premortem "$@"
+        ;;
+    backcast)
+        python3 "$ENGINE_DIR/foresight.py" backcast "$@"
+        ;;
+    forecast-eval)
+        python3 "$ENGINE_DIR/foresight.py" evaluate "$@"
+        ;;
+    forecast-accuracy)
+        python3 "$ENGINE_DIR/foresight.py" accuracy
+        ;;
+
     # --- Guard ---
     guard)
         python3 "$ENGINE_DIR/guard.py" scan "$@"
@@ -168,6 +214,10 @@ case "$CMD" in
         echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
         echo "             recommend | plateau | correlations"
         echo "SkillForge:  skill-extract | skill-use | skill-promote | skill-list | skill-stats"
+        echo "Memory:      memory | mem-store | mem-recall | mem-core | mem-checkpoint"
+        echo "             mem-resume | mem-consolidate | mem-stats"
+        echo "Foresight:   foresight | debate | premortem | backcast | forecast-eval"
+        echo "             forecast-accuracy"
         echo "Guard:       guard | test-count"
         echo "Audit:       audit | audit-verify"
         ;;
