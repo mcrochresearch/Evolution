@@ -25,7 +25,7 @@ _Nothing — Evolution has not been initiated._
 _Nothing yet._
 
 ### What I'm About To Do
-_Waiting for goal assignment via /evolution._
+_Awaiting activation. Once a goal is received, autonomous execution begins immediately with no further input needed._
 
 ## Attention Stack
 > Items requiring immediate attention, ordered by priority

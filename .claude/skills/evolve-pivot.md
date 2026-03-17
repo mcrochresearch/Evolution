@@ -6,7 +6,7 @@ user_invocable: true
 
 # EVOLUTION PIVOT — Strategic Reset
 
-The user has requested a pivot — the current approach isn't working and we need to try something fundamentally different.
+A pivot has been triggered — the current approach isn't working and we need to try something fundamentally different. This may be self-triggered (stagnation detected) or user-triggered.
 
 ## Instructions
 
@@ -32,7 +32,7 @@ The user has requested a pivot — the current approach isn't working and we nee
 ```
 ═══ EVOLUTION PIVOT ════════════════════════════════
 Killed:    S[NNN] — [Name] (fitness: [X.XX])
-Reason:    [User-requested / Plateau detected]
+Reason:    [Self-triggered / User-triggered / Plateau detected]
 
 New Strategies:
   S[NNN] — [New approach 1]

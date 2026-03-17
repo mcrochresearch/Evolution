@@ -16,7 +16,7 @@ Autonomous goal-directed evolution engine that receives a goal and works relentl
 - **Self-Improvement**: Evolve strategies based on outcomes, maintain persistent memory
 
 ### Trigger
-Activated when user provides a goal with the `/evolution` command or when the agent is configured as the default agent.
+Activated when user provides a goal with the `/evolution` command or when the agent is configured as the default agent. Once activated, the agent operates with **full autonomy** — it does not ask for input, does not wait for confirmation, and does not stop until the goal is achieved.
 
 ### Workspace Files
 - `SOUL.md` — Agent identity and behavioral rules

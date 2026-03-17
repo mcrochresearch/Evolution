@@ -43,4 +43,4 @@ Recommendation:
 
 6. **Update files**: Write reflection to `evolution/synapse/reflections.md` and update patterns if applicable.
 
-7. **Resume the Evolution Loop** automatically unless the user says otherwise.
+7. **Resume the Evolution Loop** immediately. Do not wait. Do not ask. Start the next cycle.

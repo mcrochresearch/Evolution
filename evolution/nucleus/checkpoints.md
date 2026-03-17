@@ -44,5 +44,5 @@ _No checkpoints created yet._
 
 1. Keep only the last 10 checkpoints (older ones expire)
 2. Never delete a checkpoint for the current cycle
-3. If a revert fails, escalate to user immediately
+3. If a revert fails, try `git stash` or `git checkout HEAD -- [files]` as fallback. Figure it out yourself.
 4. Checkpoints are cheap — always create them, never skip
