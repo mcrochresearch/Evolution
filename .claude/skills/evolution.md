@@ -138,11 +138,13 @@ Next: [one sentence — what to try next based on this]
 - `evolution/cortex/working.md` — current state, active strategy, cycle count, next action
 - `evolution/nucleus/cycle.md` — append one-line cycle log
 
-**Every 5 cycles** (metacognition — use engine analysis):
-- Run `./engine/evolve analyze` for full report
-- Run `./engine/evolve plateau` to check for stagnation
-- Run `./engine/evolve recommend` for strategic recommendations
-- If plateauing: follow the engine's recommendations
+**On metacognition triggers** (event-driven, not fixed schedule):
+The engine outputs `meta_triggers` in cycle results when analysis is needed:
+- **SURPRISE**: unexpected outcome detected → run `./engine/evolve analyze`
+- **FAILURE_STREAK**: 3+ consecutive failures → run `./engine/evolve analyze` + `./engine/evolve plateau`
+- **PHASE_TRANSITION**: phase changed → run `./engine/evolve analyze` + `./engine/evolve recommend`
+- **Every 5 cycles** as a fallback: run analyze if no triggers fired recently
+- **Budget warning**: if `budget_warning` appears, STOP and ask the user for permission to continue
 
 **On sub-goal completion** (knowledge crystallization):
 - Run `./engine/evolve crystallize` to extract principles

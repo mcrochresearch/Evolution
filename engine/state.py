@@ -46,7 +46,8 @@ BREAKTHROUGH_JUMP = 0.15            # Min single-cycle jump for breakthrough
 MATURITY_THRESHOLD = 0.85           # Fitness above this = near completion
 PHASE_HYSTERESIS = 2                # Consecutive detections before phase change
 MAX_POPULATION = 8                  # Auto-cull when population exceeds this
-SURPRISE_THRESHOLD = 0.10           # Delta above this is "surprising"
+SURPRISE_BASELINE = 0.10            # Minimum surprise threshold (adaptive scales up)
+MAX_CYCLES_DEFAULT = 200            # Default cycle budget before mandatory human review
 MIN_PROVEN_SUCCESSES = 5            # Successes needed before PROVEN status
 MAX_HISTORY = 500                   # Rolling window for fitness_history, cycles, episodes
 
@@ -75,6 +76,7 @@ def default_state(goal: str) -> dict:
         "sub_goals": [],
         "success_criteria": [],
         "cumulative_regret": 0.0,
+        "max_cycles": MAX_CYCLES_DEFAULT,
     }
 
 
@@ -349,6 +351,7 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
         state["consecutive_successes"] = 0
 
     # Detect phase transitions
+    prev_phase = state["phase"]
     state["phase"] = detect_phase(state)
 
     # Log cycle
@@ -365,17 +368,51 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
     }
     state["cycles"].append(cycle_log)
 
+    # Adaptive surprise threshold: scales with recent variance so early
+    # exploration (high variance) has a higher bar for "surprising" and
+    # late refinement (low variance) flags smaller deviations.
+    history = state["fitness_history"]
+    if len(history) >= 5:
+        recent_sd = _sample_sd(history[-5:])
+        surprise_threshold = max(SURPRISE_BASELINE, 2 * recent_sd)
+    else:
+        surprise_threshold = SURPRISE_BASELINE
+    is_surprise = abs(delta) > surprise_threshold
+
     # Log episode
     state["episodes"].append({
         "cycle": cycle_num,
         "action": action,
         "outcome": "KEPT" if kept else "REVERTED",
         "fitness": fitness,
-        "surprise": abs(delta) > SURPRISE_THRESHOLD,
+        "surprise": is_surprise,
         "timestamp": now(),
     })
 
+    # Cycle budget check (alignment safeguard)
+    max_cycles = state.get("max_cycles", MAX_CYCLES_DEFAULT)
+    budget_warning = None
+    if max_cycles > 0 and cycle_num >= max_cycles:
+        budget_warning = f"Cycle budget ({max_cycles}) reached. Mandatory human review required."
+
+    # Event-triggered metacognition recommendations
+    # (replaces fixed 5-cycle schedule with signal-driven analysis)
+    meta_triggers = []
+    if is_surprise:
+        meta_triggers.append("SURPRISE: unexpected outcome — run analyze")
+    if state["consecutive_failures"] >= 3:
+        meta_triggers.append("FAILURE_STREAK: 3+ consecutive failures — run analyze + plateau")
+    if state["phase"] != prev_phase:
+        meta_triggers.append("PHASE_TRANSITION: run analyze")
+
     save_state(state)
+
+    # Enhance cycle log with metacognition signals
+    cycle_log["surprise"] = is_surprise
+    if meta_triggers:
+        cycle_log["meta_triggers"] = meta_triggers
+    if budget_warning:
+        cycle_log["budget_warning"] = budget_warning
     print(json.dumps(cycle_log))
 
 
