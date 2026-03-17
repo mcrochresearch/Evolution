@@ -41,9 +41,10 @@ LOCK_FILE = STATE_DIR / ".lock"
 # Phase detection thresholds (documented rationale)
 GENESIS_CYCLES = 3                  # Minimum cycles before phase detection kicks in
 PLATEAU_WINDOW = 5                  # Cycles to check for stagnation
-PLATEAU_VARIANCE = 0.02             # Max fitness variance to consider plateau
+PLATEAU_SD_THRESHOLD = 0.015        # Max standard deviation to consider plateau
 BREAKTHROUGH_JUMP = 0.15            # Min single-cycle jump for breakthrough
 MATURITY_THRESHOLD = 0.85           # Fitness above this = near completion
+PHASE_HYSTERESIS = 2                # Consecutive detections before phase change
 MAX_POPULATION = 8                  # Auto-cull when population exceeds this
 SURPRISE_THRESHOLD = 0.10           # Delta above this is "surprising"
 MIN_PROVEN_SUCCESSES = 5            # Successes needed before PROVEN status
@@ -63,6 +64,8 @@ def default_state(goal: str) -> dict:
         "consecutive_failures": 0,
         "consecutive_successes": 0,
         "next_strategy_id": 1,
+        "_phase_pending": None,
+        "_phase_pending_count": 0,
         "strategies": [],
         "graveyard": [],
         "hall_of_fame": [],
@@ -71,6 +74,7 @@ def default_state(goal: str) -> dict:
         "episodes": [],
         "sub_goals": [],
         "success_criteria": [],
+        "cumulative_regret": 0.0,
     }
 
 
@@ -222,12 +226,14 @@ def cmd_add_strategy(name: str, approach: str, hypothesis: str):
 
 
 def cmd_select():
-    """Select next strategy using pure Thompson Sampling.
+    """Select next strategy using Contextual Thompson Sampling.
 
     Thompson Sampling naturally balances exploration vs exploitation through
-    posterior sampling — no epsilon-greedy needed. Strategies with few attempts
-    have wide Beta distributions (explore), while proven strategies cluster
-    near their true success rate (exploit).
+    posterior sampling. Contextual extension: strategies track success rates
+    per fitness context (low/mid/high), so selection adapts to the current
+    situation — a strategy that works at low fitness may not work at high.
+
+    Seed is logged for reproducibility.
     """
     state = load_state()
     strategies = [s for s in state["strategies"] if s["status"] != "EXTINCT"]
@@ -236,11 +242,27 @@ def cmd_select():
         print(json.dumps({"error": "No strategies available. Add strategies first."}))
         sys.exit(1)
 
-    # Thompson Sampling: sample from Beta(successes+1, failures+1) for each strategy
+    # Log seed for reproducibility
+    seed = int.from_bytes(os.urandom(4), "big")
+    random.seed(seed)
+
+    # Determine current fitness context
+    current_fitness = state["fitness"]
+    context = "low" if current_fitness < 0.33 else ("mid" if current_fitness < 0.66 else "high")
+
+    # Contextual Thompson Sampling: use context-specific success/failure counts
+    # if available, otherwise fall back to global counts
     scores = []
     for s in strategies:
-        alpha = s["successes"] + 1   # Beta(1,1) = uniform prior
-        beta_param = (s["attempts"] - s["successes"]) + 1
+        ctx_data = s.get("context_stats", {}).get(context)
+        if ctx_data and ctx_data.get("attempts", 0) >= 2:
+            # Use context-specific posterior
+            alpha = ctx_data["successes"] + 1
+            beta_param = (ctx_data["attempts"] - ctx_data["successes"]) + 1
+        else:
+            # Fall back to global posterior
+            alpha = s["successes"] + 1
+            beta_param = (s["attempts"] - s["successes"]) + 1
         sample = random.betavariate(alpha, beta_param)
         scores.append((sample, s))
 
@@ -250,11 +272,13 @@ def cmd_select():
     print(json.dumps({
         "selected": selected["id"],
         "name": selected["name"],
-        "method": "thompson_sampling",
+        "method": "contextual_thompson_sampling",
+        "context": context,
         "sample_score": round(scores[0][0], 4),
         "fitness": selected["fitness"],
         "attempts": selected["attempts"],
         "population_size": len(strategies),
+        "seed": seed,
     }))
 
 
@@ -276,6 +300,9 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
     state["fitness"] = fitness
     state["fitness_history"].append(fitness)
 
+    # Determine fitness context for contextual bandit tracking
+    context = "low" if prev_fitness < 0.33 else ("mid" if prev_fitness < 0.66 else "high")
+
     # Update strategy stats
     for s in state["strategies"]:
         if s["id"] == strategy_id:
@@ -287,6 +314,14 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
             s["fitness"] = round(prev_avg + (fitness - prev_avg) / s["attempts"], 4)
             # PROVEN requires statistically meaningful evidence
             s["status"] = "PROVEN" if s["successes"] >= MIN_PROVEN_SUCCESSES else s["status"]
+            # Update context-specific stats for contextual Thompson Sampling
+            if "context_stats" not in s:
+                s["context_stats"] = {}
+            if context not in s["context_stats"]:
+                s["context_stats"][context] = {"attempts": 0, "successes": 0}
+            s["context_stats"][context]["attempts"] += 1
+            if kept:
+                s["context_stats"][context]["successes"] += 1
             break
 
     # Track consecutive outcomes
@@ -324,20 +359,34 @@ def cmd_cycle(strategy_id: str, action: str, tests_passing: int,
         "timestamp": now(),
     })
 
+    # Compute per-round regret: best_arm_rate - chosen_arm_rate
+    # This is the standard metric for bandit algorithm quality
+    active = [s for s in state["strategies"] if s["status"] != "EXTINCT" and s["attempts"] > 0]
+    if active:
+        best_rate = max(s["successes"] / s["attempts"] for s in active)
+        chosen = next((s for s in state["strategies"] if s["id"] == strategy_id), None)
+        if chosen and chosen["attempts"] > 0:
+            chosen_rate = chosen["successes"] / chosen["attempts"]
+            round_regret = max(0.0, best_rate - chosen_rate)
+            state["cumulative_regret"] = round(
+                state.get("cumulative_regret", 0.0) + round_regret, 4
+            )
+
     save_state(state)
     print(json.dumps(cycle_log))
 
 
-def detect_phase(state: dict) -> str:
-    """Detect which evolutionary phase we're in.
+def _sample_sd(values: list) -> float:
+    """Compute sample standard deviation (Bessel-corrected)."""
+    n = len(values)
+    if n < 2:
+        return 0.0
+    mean = sum(values) / n
+    return math.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1))
 
-    Phases:
-    - GENESIS:       First few cycles, establishing baseline
-    - GROWTH:        Fitness is trending upward
-    - PLATEAU:       Fitness stagnant for PLATEAU_WINDOW cycles
-    - BREAKTHROUGH:  Sudden large fitness improvement
-    - MATURITY:      High fitness, nearing goal completion
-    """
+
+def _detect_raw_phase(state: dict) -> str:
+    """Detect the raw phase signal (before hysteresis)."""
     cycle = state["cycle"]
     history = state["fitness_history"]
 
@@ -348,17 +397,58 @@ def detect_phase(state: dict) -> str:
     if len(history) >= 2 and history[-1] - history[-2] > BREAKTHROUGH_JUMP:
         return "BREAKTHROUGH"
 
-    # Check for maturity (high fitness)
-    if state["fitness"] > MATURITY_THRESHOLD:
+    # Check for maturity (high fitness) — must be sustained (last 3 cycles)
+    if len(history) >= 3 and all(f > MATURITY_THRESHOLD for f in history[-3:]):
         return "MATURITY"
 
-    # Check for plateau (low variance in recent window)
+    # Check for plateau using real standard deviation (not range)
     if len(history) >= PLATEAU_WINDOW:
         recent = history[-PLATEAU_WINDOW:]
-        if max(recent) - min(recent) < PLATEAU_VARIANCE:
+        sd = _sample_sd(recent)
+        if sd < PLATEAU_SD_THRESHOLD:
             return "PLATEAU"
 
     return "GROWTH"
+
+
+def detect_phase(state: dict) -> str:
+    """Detect evolutionary phase with hysteresis to prevent jitter.
+
+    Requires PHASE_HYSTERESIS consecutive detections of a new phase
+    before actually transitioning (except BREAKTHROUGH which is immediate).
+    """
+    raw = _detect_raw_phase(state)
+    current = state.get("phase", "GENESIS")
+
+    # BREAKTHROUGH is always immediate
+    if raw == "BREAKTHROUGH":
+        state["_phase_pending"] = None
+        state["_phase_pending_count"] = 0
+        return raw
+
+    # GENESIS is always immediate
+    if raw == "GENESIS":
+        return raw
+
+    # If same as current phase, reset pending counter
+    if raw == current:
+        state["_phase_pending"] = None
+        state["_phase_pending_count"] = 0
+        return current
+
+    # New phase detected — apply hysteresis
+    if raw == state.get("_phase_pending"):
+        state["_phase_pending_count"] = state.get("_phase_pending_count", 0) + 1
+    else:
+        state["_phase_pending"] = raw
+        state["_phase_pending_count"] = 1
+
+    if state["_phase_pending_count"] >= PHASE_HYSTERESIS:
+        state["_phase_pending"] = None
+        state["_phase_pending_count"] = 0
+        return raw
+
+    return current
 
 
 def cmd_plateau():
@@ -372,7 +462,7 @@ def cmd_plateau():
 
     recent = history[-PLATEAU_WINDOW:]
     variance = max(recent) - min(recent)
-    stagnating = variance < PLATEAU_VARIANCE
+    stagnating = variance < PLATEAU_SD_THRESHOLD
 
     recommendations = []
     if stagnating:
@@ -669,9 +759,9 @@ def cmd_status():
         recent_avg = sum(history[-3:]) / 3
         older_avg = sum(history[-6:-3]) / 3 if len(history) >= 6 else sum(history[:3]) / max(len(history[:3]), 1)
         diff = recent_avg - older_avg
-        if diff > PLATEAU_VARIANCE:
+        if diff > PLATEAU_SD_THRESHOLD:
             trend = "IMPROVING"
-        elif diff < -PLATEAU_VARIANCE:
+        elif diff < -PLATEAU_SD_THRESHOLD:
             trend = "DECLINING"
         else:
             trend = "STABLE"
@@ -691,6 +781,8 @@ def cmd_status():
         "episodes": len(state["episodes"]),
         "principles": len(state["principles"]),
         "consecutive_failures": state["consecutive_failures"],
+        "cumulative_regret": round(state.get("cumulative_regret", 0.0), 4),
+        "avg_regret_per_cycle": round(state.get("cumulative_regret", 0.0) / max(total_cycles, 1), 4),
     }
     print(json.dumps(dashboard, indent=2))
 

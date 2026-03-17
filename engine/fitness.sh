@@ -11,6 +11,7 @@
 # - Weighted scoring: tests (0.40), build (0.20), lint (0.15), types (0.15)
 # - Timeout protection: kills long-running commands after TIMEOUT_SEC
 # - Explicit error reporting: no silent failures
+# - Portable: works on both GNU/Linux and macOS (no GNU-only extensions)
 #
 # Usage: ./engine/fitness.sh [project_dir]
 # Output: JSON to stdout with fitness scores
@@ -44,13 +45,14 @@ add_result() {
         score=0
         [[ "$passed" == "true" ]] && score=1
     fi
-    RESULTS+=("{\"name\":\"$name\",\"passed\":$passed,\"score\":$score,\"weight\":$weight,\"detail\":\"$detail\"}")
-    TOTAL_SCORE=$(echo "$TOTAL_SCORE + $score * $weight" | bc -l 2>/dev/null || echo "$TOTAL_SCORE")
-    TOTAL_WEIGHT=$(echo "$TOTAL_WEIGHT + $weight" | bc -l 2>/dev/null || echo "$TOTAL_WEIGHT")
+    # Store as tab-separated fields; python3 will JSON-escape them later
+    RESULTS+=("${name}	${passed}	${score}	${weight}	${detail}")
+    TOTAL_SCORE=$(python3 -c "print($TOTAL_SCORE + $score * $weight)" 2>/dev/null || echo "$TOTAL_SCORE")
+    TOTAL_WEIGHT=$(python3 -c "print($TOTAL_WEIGHT + $weight)" 2>/dev/null || echo "$TOTAL_WEIGHT")
 }
 
 add_error() {
-    ERRORS+=("\"$1\"")
+    ERRORS+=("$1")
 }
 
 # Run a command with timeout protection
@@ -58,54 +60,79 @@ run_with_timeout() {
     local cmd="$1"
     if command -v timeout &>/dev/null; then
         timeout "$TIMEOUT_SEC" bash -c "$cmd" 2>&1
+    elif command -v gtimeout &>/dev/null; then
+        # macOS with coreutils installed via Homebrew
+        gtimeout "$TIMEOUT_SEC" bash -c "$cmd" 2>&1
     else
         # Fallback: run without timeout but warn
         bash -c "$cmd" 2>&1
     fi
 }
 
-# Parse test counts from framework output.
-# Each framework has a different output format — we match the most common patterns.
+# Parse test counts from framework output using python3 for portability.
+# Each framework has a different output format — python3 regex handles them all
+# without relying on GNU grep -oP.
 parse_test_counts() {
     local output="$1" framework="$2"
-    case "$framework" in
-        jest|vitest)
-            # Jest: "Tests:  5 passed, 2 failed, 7 total"
-            # Vitest: similar format
-            TESTS_PASSING=$(echo "$output" | grep -oP 'Tests:\s+\K\d+(?= passed)' 2>/dev/null || echo "0")
-            local failed=$(echo "$output" | grep -oP '\d+(?= failed)' 2>/dev/null | tail -1 || echo "0")
-            TESTS_TOTAL=$((TESTS_PASSING + failed))
-            # Fallback: try "X passing" format (mocha)
-            if [[ "$TESTS_TOTAL" -eq 0 ]]; then
-                TESTS_PASSING=$(echo "$output" | grep -oP '\K\d+(?= passing)' 2>/dev/null || echo "0")
-                failed=$(echo "$output" | grep -oP '\K\d+(?= failing)' 2>/dev/null || echo "0")
-                TESTS_TOTAL=$((TESTS_PASSING + failed))
-            fi
-            ;;
-        pytest)
-            # Pytest: "5 passed, 2 failed" or "5 passed"
-            TESTS_PASSING=$(echo "$output" | grep -oP '\K\d+(?= passed)' 2>/dev/null | tail -1 || echo "0")
-            local failed=$(echo "$output" | grep -oP '\K\d+(?= failed)' 2>/dev/null | tail -1 || echo "0")
-            local errors=$(echo "$output" | grep -oP '\K\d+(?= error)' 2>/dev/null | tail -1 || echo "0")
-            TESTS_TOTAL=$((TESTS_PASSING + failed + errors))
-            ;;
-        cargo)
-            # Cargo: "test result: ok. 5 passed; 0 failed; 0 ignored"
-            TESTS_PASSING=$(echo "$output" | grep -oP 'test result:.*\K\d+(?= passed)' 2>/dev/null || echo "0")
-            local failed=$(echo "$output" | grep -oP 'test result:.*\K\d+(?= failed)' 2>/dev/null || echo "0")
-            TESTS_TOTAL=$((TESTS_PASSING + failed))
-            ;;
-        go)
-            # Go: "ok  package  0.005s" per passing package, "FAIL" per failing
-            TESTS_PASSING=$(echo "$output" | grep -c '^ok' 2>/dev/null || echo "0")
-            local failed=$(echo "$output" | grep -c '^FAIL' 2>/dev/null || echo "0")
-            TESTS_TOTAL=$((TESTS_PASSING + failed))
-            ;;
-        *)
-            # Generic: just use exit code, count as 1 test
-            TESTS_TOTAL=1
-            ;;
-    esac
+    local counts
+    counts=$(python3 -c "
+import re, sys
+
+output = sys.stdin.read()
+framework = '$framework'
+passing = 0
+failed = 0
+errors = 0
+
+if framework in ('jest', 'vitest'):
+    # Jest/Vitest: 'Tests:  5 passed, 2 failed, 7 total'
+    m = re.search(r'Tests:\s+(\d+)\s+passed', output)
+    if m:
+        passing = int(m.group(1))
+    m = re.search(r'(\d+)\s+failed', output)
+    if m:
+        failed = int(m.group(1))
+    # Fallback: mocha-style 'X passing' / 'X failing'
+    if passing == 0 and failed == 0:
+        m = re.search(r'(\d+)\s+passing', output)
+        if m:
+            passing = int(m.group(1))
+        m = re.search(r'(\d+)\s+failing', output)
+        if m:
+            failed = int(m.group(1))
+
+elif framework == 'pytest':
+    # Pytest: '5 passed, 2 failed' or '5 passed'
+    m = re.search(r'(\d+)\s+passed', output)
+    if m:
+        passing = int(m.group(1))
+    m = re.search(r'(\d+)\s+failed', output)
+    if m:
+        failed = int(m.group(1))
+    m = re.search(r'(\d+)\s+error', output)
+    if m:
+        errors = int(m.group(1))
+
+elif framework == 'cargo':
+    # Cargo: 'test result: ok. 5 passed; 0 failed; 0 ignored'
+    m = re.search(r'test result:.*?(\d+)\s+passed', output)
+    if m:
+        passing = int(m.group(1))
+    m = re.search(r'test result:.*?(\d+)\s+failed', output)
+    if m:
+        failed = int(m.group(1))
+
+elif framework == 'go':
+    # Go: 'ok  package  0.005s' per passing, 'FAIL' per failing
+    passing = len(re.findall(r'^ok\b', output, re.MULTILINE))
+    failed = len(re.findall(r'^FAIL\b', output, re.MULTILINE))
+
+total = passing + failed + errors
+print(f'{passing} {total}')
+" <<< "$output" 2>/dev/null) || counts="0 0"
+
+    TESTS_PASSING=$(echo "$counts" | cut -d' ' -f1)
+    TESTS_TOTAL=$(echo "$counts" | cut -d' ' -f2)
 
     # Safeguard: ensure non-zero total
     [[ "$TESTS_TOTAL" -eq 0 ]] && TESTS_TOTAL=1
@@ -133,7 +160,6 @@ if [[ -f "package.json" ]]; then
             grep -q "vitest" package.json 2>/dev/null && local_framework="vitest"
             parse_test_counts "$TEST_OUTPUT" "$local_framework"
             local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
-            # Continuous scoring: tests_passing/tests_total instead of binary
             local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
             add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
@@ -258,45 +284,114 @@ else
 fi
 
 # --- Compute overall fitness ---
-if command -v bc &>/dev/null; then
-    if (( $(echo "$TOTAL_WEIGHT > 0" | bc -l 2>/dev/null || echo 0) )); then
-        FITNESS=$(echo "scale=4; $TOTAL_SCORE / $TOTAL_WEIGHT" | bc -l 2>/dev/null || echo "0")
-    else
-        FITNESS="0"
-    fi
-else
-    # Fallback: Python for math if bc unavailable
-    if [[ ${#RESULTS[@]} -gt 0 ]]; then
-        FITNESS=$(python3 -c "print(round($TOTAL_SCORE / max($TOTAL_WEIGHT, 0.001), 4))" 2>/dev/null || echo "0")
-    else
-        FITNESS="0"
-    fi
-    add_error "bc not found — used Python fallback for arithmetic"
-fi
-
-# --- Output JSON ---
-RESULTS_JSON=""
 if [[ ${#RESULTS[@]} -gt 0 ]]; then
-    RESULTS_JSON=$(IFS=,; echo "${RESULTS[*]}")
+    FITNESS=$(python3 -c "
+tw = $TOTAL_WEIGHT
+ts = $TOTAL_SCORE
+print(round(ts / max(tw, 0.001), 4))
+" 2>/dev/null || echo "0")
+else
+    FITNESS="0"
 fi
 
-ERRORS_JSON=""
-if [[ ${#ERRORS[@]} -gt 0 ]]; then
-    ERRORS_JSON=$(IFS=,; echo "${ERRORS[*]}")
-fi
+# --- Collect environment fingerprint ---
+ENV_PYTHON3_VERSION=$(python3 --version 2>/dev/null | head -1 || echo "unavailable")
+ENV_NODE_VERSION=$(node --version 2>/dev/null || echo "not installed")
+ENV_OS=$(uname -s 2>/dev/null || echo "unknown")
+ENV_OS_VERSION=$(uname -r 2>/dev/null || echo "unknown")
+ENV_HAS_BC=$( command -v bc &>/dev/null && echo "true" || echo "false" )
+ENV_HAS_TIMEOUT=$( (command -v timeout &>/dev/null || command -v gtimeout &>/dev/null) && echo "true" || echo "false" )
+ENV_HAS_NPM=$( command -v npm &>/dev/null && echo "true" || echo "false" )
+ENV_HAS_PYTEST=$( command -v pytest &>/dev/null && echo "true" || echo "false" )
+ENV_HAS_CARGO=$( command -v cargo &>/dev/null && echo "true" || echo "false" )
+ENV_HAS_GO=$( command -v go &>/dev/null && echo "true" || echo "false" )
+ENV_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-cat <<EOF
-{
-  "fitness": $FITNESS,
-  "tests_passing": $TESTS_PASSING,
-  "tests_total": $TESTS_TOTAL,
-  "build": $BUILD_OK,
-  "lint": $LINT_OK,
-  "types": $TYPES_OK,
-  "project_type": "$DETECTED_TYPE",
-  "checks": [$RESULTS_JSON],
-  "errors": [$ERRORS_JSON],
-  "timeout_sec": $TIMEOUT_SEC,
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# --- Output JSON via python3 to guarantee valid JSON ---
+# Pass all data to python3 which handles escaping, formatting, and construction.
+# Results are passed as tab-separated lines via a temp file to avoid argument length limits.
+
+RESULTS_FILE=$(mktemp)
+for r in "${RESULTS[@]+"${RESULTS[@]}"}"; do
+    echo "$r" >> "$RESULTS_FILE"
+done
+
+ERRORS_FILE=$(mktemp)
+for e in "${ERRORS[@]+"${ERRORS[@]}"}"; do
+    echo "$e" >> "$ERRORS_FILE"
+done
+
+python3 -c "
+import json, sys
+
+fitness = float('$FITNESS')
+tests_passing = int('$TESTS_PASSING')
+tests_total = int('$TESTS_TOTAL')
+build_ok = True if '$BUILD_OK' == 'true' else False
+lint_ok = True if '$LINT_OK' == 'true' else False
+types_ok = True if '$TYPES_OK' == 'true' else False
+project_type = '$DETECTED_TYPE'
+timeout_sec = int('$TIMEOUT_SEC')
+
+# Parse results from tab-separated file
+checks = []
+with open('$RESULTS_FILE') as f:
+    for line in f:
+        line = line.rstrip('\n')
+        if not line:
+            continue
+        parts = line.split('\t')
+        if len(parts) == 5:
+            name, passed, score, weight, detail = parts
+            checks.append({
+                'name': name,
+                'passed': passed == 'true',
+                'score': float(score),
+                'weight': float(weight),
+                'detail': detail
+            })
+
+# Parse errors
+errors = []
+with open('$ERRORS_FILE') as f:
+    for line in f:
+        line = line.rstrip('\n')
+        if line:
+            errors.append(line)
+
+environment = {
+    'python3': '$ENV_PYTHON3_VERSION',
+    'node': '$ENV_NODE_VERSION',
+    'os': '$ENV_OS',
+    'os_version': '$ENV_OS_VERSION',
+    'tools': {
+        'bc': $ENV_HAS_BC,
+        'timeout': $ENV_HAS_TIMEOUT,
+        'npm': $ENV_HAS_NPM,
+        'pytest': $ENV_HAS_PYTEST,
+        'cargo': $ENV_HAS_CARGO,
+        'go': $ENV_HAS_GO
+    },
+    'timestamp': '$ENV_TIMESTAMP'
 }
-EOF
+
+output = {
+    'fitness': fitness,
+    'tests_passing': tests_passing,
+    'tests_total': tests_total,
+    'build': build_ok,
+    'lint': lint_ok,
+    'types': types_ok,
+    'project_type': project_type,
+    'checks': checks,
+    'errors': errors,
+    'timeout_sec': timeout_sec,
+    'environment': environment,
+    'timestamp': '$ENV_TIMESTAMP'
+}
+
+print(json.dumps(output, indent=2))
+"
+
+# Clean up temp files
+rm -f "$RESULTS_FILE" "$ERRORS_FILE"

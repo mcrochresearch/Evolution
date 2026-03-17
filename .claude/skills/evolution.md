@@ -90,7 +90,7 @@ REPEAT
 ```
 
 ### SELECT
-Run `./engine/evolve select` — pure Thompson Sampling (Beta distribution) balances exploration vs exploitation automatically through posterior sampling. No epsilon-greedy needed.
+Run `./engine/evolve select` — **Contextual Thompson Sampling** (Beta distribution with fitness-level context). Strategies track success rates per context bucket (low/mid/high fitness), so selection adapts to the current situation. A strategy that works at low fitness may not work at high fitness. Seeds are logged for full reproducibility. Cumulative regret is tracked as the gold-standard bandit performance metric.
 
 ### EXECUTE
 - **One change per cycle.** Never bundle unrelated changes.
@@ -111,7 +111,7 @@ If no tests exist, your FIRST action is to create them. You cannot evolve withou
 ### SCORE
 Log: `./engine/evolve cycle "SXXX" "what was done" <tests_passing> <tests_total> <fitness> <true|false>`
 
-The engine validates all inputs (fitness 0.0-1.0, tests_passing <= tests_total), tracks history, and detects phase transitions.
+The engine validates all inputs (fitness 0.0-1.0, tests_passing <= tests_total), tracks history, detects phase transitions with hysteresis (requires N consecutive detections before transitioning, except BREAKTHROUGH which is immediate), and computes cumulative regret.
 
 ### KEEP or REVERT
 - Tests improved or stable + progress toward goal → **KEEP**
@@ -127,7 +127,7 @@ Next: [one sentence — what to try next based on this]
 ```
 
 ### EVOLVE
-- **Success** → Reinforce: record pattern in `evolution/cortex/procedural.md` if worked 5+ times
+- **Success** → Reinforce: record pattern in `evolution/cortex/procedural.md` if worked 5+ times (PROVEN status requires 5+ successes with Wilson score confidence)
 - **Failure** → Mutate: `./engine/evolve mutate "SXXX" "variation name" "new approach"`
 - **3+ failures** → Extinct: `./engine/evolve extinct "SXXX" "reason"`, try new approach
 - **2 near-misses** → Crossover: `./engine/evolve crossover "S001" "S002" "combined"`

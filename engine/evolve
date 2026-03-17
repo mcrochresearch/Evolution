@@ -16,7 +16,7 @@
 #   ./engine/evolve plateau          Check for stagnation
 #   ./engine/evolve diversity        Check population diversity
 #   ./engine/evolve recommend        Get strategic recommendations
-#   ./engine/evolve correlations     Strategy-outcome causal analysis
+#   ./engine/evolve correlations     Strategy-outcome correlational analysis
 #   ./engine/evolve crossover        Combine two strategies
 #   ./engine/evolve cull             Remove weakest strategies
 #   ./engine/evolve resurrect        Bring back graveyard strategy
@@ -89,7 +89,7 @@ case "$CMD" in
         bash "$ENGINE_DIR/checkpoint.sh" create "$@"
         ;;
     revert)
-        bash "$ENGINE_DIR/checkpoint.sh" revert
+        bash "$ENGINE_DIR/checkpoint.sh" revert --confirm
         ;;
     checkpoints)
         bash "$ENGINE_DIR/checkpoint.sh" list
