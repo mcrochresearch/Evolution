@@ -744,7 +744,10 @@ def main():
 
     try:
         if cmd == "init":
-            cmd_init(sys.argv[2] if len(sys.argv) > 2 else "No goal specified")
+            if len(sys.argv) < 3 or not sys.argv[2].strip():
+                print(json.dumps({"error": "Usage: init <goal>. A goal is required."}))
+                sys.exit(1)
+            cmd_init(sys.argv[2])
         elif cmd == "add-strategy":
             if len(sys.argv) < 4:
                 print(json.dumps({"error": "Usage: add-strategy <name> <approach> [hypothesis]"}))

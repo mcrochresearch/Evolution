@@ -517,31 +517,32 @@ def cmd_recommend():
 
 
 def cmd_report():
-    """Full analysis report combining all analyses."""
+    """Full analysis report as structured JSON."""
     state = load_state()
-    print("=" * 60)
-    print("EVOLUTION ANALYSIS REPORT")
-    print("=" * 60)
-    print(f"\nGoal: {state['goal']}")
-    print(f"Phase: {state['phase']}")
-    print(f"Cycle: {state['cycle']}")
-    print(f"Fitness: {state['fitness']:.4f}")
-    print(f"Exploration Rate: {state['exploration_rate']:.3f}")
-    print(f"\n{'—' * 60}")
-    print("\n## Velocity")
-    cmd_velocity()
-    print(f"\n{'—' * 60}")
-    print("\n## Diversity")
-    cmd_diversity()
-    print(f"\n{'—' * 60}")
-    print("\n## Blind Spots")
-    cmd_blind_spots()
-    print(f"\n{'—' * 60}")
-    print("\n## Correlations")
-    cmd_correlations()
-    print(f"\n{'—' * 60}")
-    print("\n## Recommendations")
-    cmd_recommend()
+    import io, contextlib
+
+    sections = {}
+    for name, func in [("velocity", cmd_velocity), ("diversity", cmd_diversity),
+                        ("blind_spots", cmd_blind_spots), ("correlations", cmd_correlations),
+                        ("recommendations", cmd_recommend)]:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            try:
+                func()
+            except SystemExit:
+                pass
+        try:
+            sections[name] = json.loads(buf.getvalue())
+        except (json.JSONDecodeError, ValueError):
+            sections[name] = {"raw": buf.getvalue().strip()}
+
+    print(json.dumps({
+        "goal": state["goal"],
+        "phase": state["phase"],
+        "cycle": state["cycle"],
+        "fitness": round(state["fitness"], 4),
+        **sections,
+    }, indent=2))
 
 
 def main():

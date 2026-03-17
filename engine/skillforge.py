@@ -89,9 +89,9 @@ def find_skill_by_id(registry, skill_id):
 
 def find_skill_by_name(registry, name):
     """Find a skill by name (for deduplication)."""
-    normalized = name.lower().replace(" ", "-")
+    normalized = _sanitize_name(name)
     for s in registry["skills"]:
-        if s["name"].lower().replace(" ", "-") == normalized:
+        if _sanitize_name(s["name"]) == normalized:
             return s
     return None
 
@@ -128,7 +128,7 @@ def cmd_extract(name: str, description: str, steps: list, trigger: str = ""):
         "id": skill_id,
         "name": name,
         "description": description,
-        "file": str(SKILLS_DIR / f"{name.lower().replace(' ', '-')}.md"),
+        "file": str(SKILLS_DIR / f"{_sanitize_name(name)}.md"),
         "created": now(),
         "times_used": 0,
         "successes": 0,
@@ -141,10 +141,20 @@ def cmd_extract(name: str, description: str, steps: list, trigger: str = ""):
     print(json.dumps({"status": "extracted", "skill": skill_entry}))
 
 
+def _sanitize_name(name: str) -> str:
+    """Sanitize skill name to prevent path traversal."""
+    safe = name.lower().replace(' ', '-')
+    # Remove path separators and dangerous characters
+    safe = safe.replace('/', '').replace('\\', '').replace('..', '').replace('\0', '')
+    if not safe:
+        safe = "unnamed-skill"
+    return safe
+
+
 def _write_skill_file(name, description, steps, trigger, skill_id, version):
     """Write the skill markdown file atomically."""
     skill_content = f"""---
-name: evolution-{name.lower().replace(' ', '-')}
+name: evolution-{_sanitize_name(name)}
 description: "{description}"
 ---
 
@@ -169,7 +179,7 @@ description: "{description}"
 - **Extracted**: {now()}
 """
 
-    skill_path = SKILLS_DIR / f"{name.lower().replace(' ', '-')}.md"
+    skill_path = SKILLS_DIR / f"{_sanitize_name(name)}.md"
     # Atomic write
     fd, tmp_path = tempfile.mkstemp(dir=SKILLS_DIR, suffix=".tmp")
     try:
