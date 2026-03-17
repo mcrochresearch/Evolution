@@ -27,6 +27,7 @@ Usage:
 
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -145,10 +146,10 @@ def cmd_extract(name: str, description: str, steps: list, trigger: str = ""):
 
 
 def _sanitize_name(name: str) -> str:
-    """Sanitize skill name to prevent path traversal."""
+    """Sanitize skill name to prevent path traversal. Uses allowlist, not denylist."""
     safe = name.lower().replace(' ', '-')
-    # Remove path separators and dangerous characters
-    safe = safe.replace('/', '').replace('\\', '').replace('..', '').replace('\0', '')
+    # Allowlist: only alphanumeric, hyphens, and underscores survive
+    safe = re.sub(r'[^a-z0-9_-]', '', safe)
     if not safe:
         safe = "unnamed-skill"
     return safe

@@ -159,8 +159,8 @@ if [[ -f "package.json" ]]; then
             local_framework="jest"
             grep -q "vitest" package.json 2>/dev/null && local_framework="vitest"
             parse_test_counts "$TEST_OUTPUT" "$local_framework"
-            local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
-            local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+            test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+            test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
             add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     else
@@ -200,8 +200,8 @@ elif [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]] || [[ -f "requirements.txt
             add_result "tests" "false" "0.40" "TIMEOUT"
         else
             parse_test_counts "$TEST_OUTPUT" "pytest"
-            local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
-            local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+            test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+            test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
             add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     elif [[ -d "tests" ]] || [[ -d "test" ]]; then
@@ -230,8 +230,8 @@ elif [[ -f "Cargo.toml" ]]; then
         add_result "tests" "false" "0.40" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "cargo"
-        local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
-        local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+        test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+        test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
         add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
@@ -253,8 +253,8 @@ elif [[ -f "go.mod" ]]; then
         add_result "tests" "false" "0.40" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "go"
-        local test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
-        local test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
+        test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
+        test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
         add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
@@ -312,11 +312,14 @@ ENV_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # Results are passed as tab-separated lines via a temp file to avoid argument length limits.
 
 RESULTS_FILE=$(mktemp)
+ERRORS_FILE=$(mktemp)
+# Trap ensures temp files are cleaned up even on early exit (set -e)
+trap 'rm -f "$RESULTS_FILE" "$ERRORS_FILE"' EXIT
+
 for r in "${RESULTS[@]+"${RESULTS[@]}"}"; do
     echo "$r" >> "$RESULTS_FILE"
 done
 
-ERRORS_FILE=$(mktemp)
 for e in "${ERRORS[@]+"${ERRORS[@]}"}"; do
     echo "$e" >> "$ERRORS_FILE"
 done
