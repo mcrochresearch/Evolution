@@ -165,10 +165,61 @@ Next: [one sentence — what to try next based on this]
 1. **NEVER STOP** — Only stop when: all criteria met, or impossible AND exhausted all alternatives, or user says stop
 2. **ONE CHANGE PER CYCLE** — Atomic changes. Test one hypothesis at a time.
 3. **ALWAYS VERIFY MECHANICALLY** — Exit codes, test counts. Never subjective.
-4. **CHECKPOINT BEFORE RISK** — Note git HEAD before changes. Revert cleanly.
+4. **CHECKPOINT BEFORE RISK** — Run `./engine/evolve checkpoint` before changes. Revert cleanly.
 5. **EMBRACE FAILURE** — Failed experiments are data. Log and learn.
 6. **STAY FOCUSED** — Every action must trace to the goal tree.
 7. **COMPOUND KNOWLEDGE** — Reference past reflections. Apply learned principles.
+8. **SIMPLICITY WINS** — If metric barely improved (<1%) but change adds complexity → DISCARD. If metric unchanged but code is simpler → KEEP. Complexity has a cost.
+
+## GUARD vs VERIFY (Separate Concerns)
+
+- **VERIFY** answers: "Did the metric improve?" (the GOAL signal)
+- **GUARD** answers: "Did anything else break?" (the SAFETY signal)
+
+Run VERIFY first (`./engine/evolve fitness`). Then check GUARD separately:
+- Do existing tests still pass? (no regressions)
+- Does the build still work?
+- Are there new lint errors?
+
+A change that improves the metric but breaks the guard → REWORK (fix the guard issue, keep the improvement). Max 2 rework attempts, then DISCARD.
+
+## WHAT NOT TO DO (Anti-Patterns)
+
+These prevent common failure modes. Violating these is grounds for immediate revert:
+
+| Anti-Pattern | Why It's Bad |
+|-------------|-------------|
+| Add `@ts-ignore`, `eslint-disable`, `# type: ignore` | Hiding errors instead of fixing them |
+| Delete or skip tests to make them pass | Destroying your own fitness signal |
+| Use `any` type or equivalent to bypass type system | Masking real type errors |
+| Make multiple unrelated changes in one cycle | Cannot attribute outcome to cause |
+| Repeat an already-discarded approach without mutation | Insanity: same input, expecting different output |
+| "Fix" by reverting someone else's working code | Destroying existing functionality |
+| Add complexity without measurable improvement | Complexity drift with no payoff |
+| Subjectively score your own work as "good" | Self-evaluation is not fitness |
+
+## COGNITIVE BIAS GUARDS
+
+When reflecting, actively counter these biases:
+
+| Bias | Counter |
+|------|---------|
+| **Confirmation bias** | Actively look for evidence AGAINST your hypothesis |
+| **Sunk cost** | Past cycles spent don't justify continuing a failing approach |
+| **Anchoring** | Don't fixate on the first approach that partially worked |
+| **Availability** | The most recent failure isn't necessarily the most important |
+| **Overconfidence** | High confidence + low evidence = dangerous. Check the data. |
+
+## ESCALATION PROTOCOL (When Stuck)
+
+After 5+ consecutive failures:
+1. Re-read ALL in-scope files from scratch (fresh eyes)
+2. Re-read the goal tree — is the decomposition still right?
+3. Review the full cycle log — what patterns emerge?
+4. Try combining two previous near-misses
+5. Try the OPPOSITE of everything you've been doing
+6. Try a radical architectural change
+7. Search externally — web, docs, similar projects
 
 ---
 
