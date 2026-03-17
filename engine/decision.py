@@ -123,7 +123,7 @@ def save_decision(state: dict):
 
 def _action_id(action: str, context: dict) -> str:
     """Generate a short deterministic ID for an action + context."""
-    raw = json.dumps({"action": action, "context": context, "time": time.time()}, sort_keys=True)
+    raw = json.dumps({"action": action, "context": context}, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
@@ -154,11 +154,19 @@ def cmd_classify(action_type: str, context: str = "{}"):
             for key, value in conditions.items():
                 if key.endswith("_gt"):
                     field = key[:-3]
-                    if ctx.get(field, 0) <= value:
+                    ctx_val = ctx.get(field, 0)
+                    try:
+                        if float(ctx_val) <= float(value):
+                            conditions_met = False
+                    except (TypeError, ValueError):
                         conditions_met = False
                 elif key.endswith("_lt"):
                     field = key[:-3]
-                    if ctx.get(field, 0) >= value:
+                    ctx_val = ctx.get(field, 0)
+                    try:
+                        if float(ctx_val) >= float(value):
+                            conditions_met = False
+                    except (TypeError, ValueError):
                         conditions_met = False
                 elif ctx.get(key) != value:
                     conditions_met = False

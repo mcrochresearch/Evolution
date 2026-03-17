@@ -112,6 +112,7 @@ def cmd_log(action_type: str, description: str, outcome: str, data: str = "{}"):
     except json.JSONDecodeError:
         extra_data = {}
 
+    core_fields = {"action_type", "description", "outcome", "timestamp", "epoch"}
     record = {
         "action_type": action_type,
         "description": description,
@@ -119,8 +120,10 @@ def cmd_log(action_type: str, description: str, outcome: str, data: str = "{}"):
         "timestamp": now(),
         "epoch": time.time(),
     }
-    # Merge extra data (strategy, fitness, PnL, etc.)
-    record.update(extra_data)
+    # Merge extra data (strategy, fitness, PnL, etc.) without overwriting core fields
+    for k, v in extra_data.items():
+        if k not in core_fields:
+            record[k] = v
 
     _append_outcome(record)
     print(json.dumps({"status": "logged", "record": record}))

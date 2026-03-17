@@ -37,7 +37,7 @@ import re
 import sys
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import Counter
 from pathlib import Path
 
@@ -384,7 +384,7 @@ def hybrid_recall(conn, query, memory_type=None, limit=DEFAULT_RECALL_LIMIT,
       5. Access frequency boost (frequently useful = higher score)
       6. Importance weighting
     """
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     scores = Counter()  # memory_id -> combined score
 
     # --- Pass 1: FTS5 keyword search ---
@@ -447,7 +447,7 @@ def hybrid_recall(conn, query, memory_type=None, limit=DEFAULT_RECALL_LIMIT,
         if mem and mem['created_at']:
             try:
                 created = datetime.fromisoformat(mem['created_at'])
-                age_days = (datetime.utcnow() - created).days
+                age_days = (datetime.now(timezone.utc) - created).days
                 decay = 0.5 ** (age_days / TIME_DECAY_HALF_LIFE_DAYS)
                 scores[mid] *= (0.7 + 0.3 * decay)  # Decay affects 30% of score
             except (ValueError, TypeError):
@@ -520,7 +520,7 @@ def store_memory(conn, memory_type, content, context="", tags=None, files=None,
         return {"error": f"Unknown type '{memory_type}'. Valid: {MEMORY_TYPES}"}
 
     c_hash = content_hash(content)
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     # --- Deduplication: check for near-identical content ---
     existing = conn.execute(
@@ -606,7 +606,7 @@ def store_memory(conn, memory_type, content, context="", tags=None, files=None,
 
 def invalidate_memory(conn, memory_id, superseded_by=None, reason=""):
     """Mark a memory as no longer valid (temporal invalidation)."""
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     mem = conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
     if not mem:
         return {"error": f"Memory {memory_id} not found"}
@@ -641,7 +641,7 @@ def add_relationship(conn, source_id, target_id, relation, weight=1.0):
         if not conn.execute("SELECT 1 FROM memories WHERE id = ?", (mid,)).fetchone():
             return {"error": f"Memory {mid} not found"}
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     conn.execute("""
         INSERT OR REPLACE INTO relationships (source_id, target_id, relation, weight, created_at)
         VALUES (?, ?, ?, ?, ?)
@@ -685,8 +685,8 @@ def save_checkpoint(conn, goal="", task="", strategy="", cycle=0, fitness=0.0,
                     working_state=None, files=None, session_id=None):
     """Save a session checkpoint for resume capability."""
     cp_id = f"CP{uuid.uuid4().hex[:8].upper()}"
-    sess_id = session_id or f"S{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-    now = datetime.utcnow().isoformat()
+    sess_id = session_id or f"S{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    now = datetime.now(timezone.utc).isoformat()
 
     conn.execute("""
         INSERT INTO checkpoints (id, session_id, goal, current_task, active_strategy,
@@ -737,7 +737,7 @@ def get_core_memory(conn, limit=CORE_MEMORY_LIMIT):
     Get the most important active memories — the 'core' that should always
     be in the agent's context window. Ranked by importance * confidence * recency.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     rows = conn.execute("""
         SELECT * FROM memories
         WHERE valid_until IS NULL
@@ -809,8 +809,18 @@ def refresh_core_memory_file(conn):
 
     output_path = os.path.join("evolution", "cortex", "core-memory.md")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, 'w') as f:
-        f.write('\n'.join(lines))
+    import tempfile
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(output_path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write('\n'.join(lines))
+        os.replace(tmp_path, output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     return {"status": "refreshed", "path": output_path, "count": len(core)}
 
@@ -827,7 +837,7 @@ def consolidate(conn):
       3. Detect and flag contradictions
       4. Rebuild TF-IDF index
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     stats = {"decayed": 0, "merged": 0, "contradictions_found": 0, "gc_candidates": 0}
 
     # --- 1. Confidence decay for old, unused memories ---
@@ -872,6 +882,12 @@ def consolidate(conn):
 
     # --- 3. Rebuild TF-IDF index ---
     rebuild_idf(conn)
+
+    # --- 3b. Rebuild FTS5 index (protects against rowid drift after VACUUM) ---
+    try:
+        conn.execute("INSERT INTO memories_fts(memories_fts) VALUES('rebuild')")
+    except Exception:
+        pass  # FTS5 not available
 
     # --- 4. Count GC candidates ---
     gc = conn.execute("""

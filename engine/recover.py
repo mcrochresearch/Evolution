@@ -23,6 +23,7 @@ Usage:
 
 import json
 import os
+import shlex
 import sys
 import time
 import subprocess
@@ -92,10 +93,10 @@ def save_recovery(state: dict):
 # ============================================================================
 
 def _execute_command(command: str, timeout: int = RETRY_TIMEOUT) -> dict:
-    """Execute a shell command and return structured result."""
+    """Execute a command and return structured result."""
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=timeout
+            shlex.split(command), capture_output=True, text=True, timeout=timeout
         )
         return {
             "success": result.returncode == 0,

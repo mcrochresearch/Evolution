@@ -90,7 +90,11 @@ def _acquire_lock():
     """Acquire an exclusive file lock for state operations."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     lock_fd = open(LOCK_FILE, "w")
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    except Exception:
+        lock_fd.close()
+        raise
     return lock_fd
 
 
@@ -304,23 +308,22 @@ def _next_sid(state: dict) -> str:
 
 def cmd_add_strategy(name: str, approach: str, hypothesis: str):
     """Add a new strategy to the population."""
-    state = load_state()
-    sid = _next_sid(state)
-    strategy = {
-        "id": sid,
-        "name": name,
-        "approach": approach,
-        "hypothesis": hypothesis,
-        "fitness": 0.0,
-        "attempts": 0,
-        "successes": 0,
-        "generation": 1,
-        "created": now(),
-        "parents": [],
-        "status": "CANDIDATE",
-    }
-    state["strategies"].append(strategy)
-    save_state(state)
+    with locked_state() as state:
+        sid = _next_sid(state)
+        strategy = {
+            "id": sid,
+            "name": name,
+            "approach": approach,
+            "hypothesis": hypothesis,
+            "fitness": 0.0,
+            "attempts": 0,
+            "successes": 0,
+            "generation": 1,
+            "created": now(),
+            "parents": [],
+            "status": "CANDIDATE",
+        }
+        state["strategies"].append(strategy)
     print(json.dumps({"status": "added", "strategy": strategy}))
 
 
@@ -646,66 +649,64 @@ def cmd_extinct(strategy_id: str, reason: str):
 
 def cmd_mutate(parent_id: str, name: str, approach: str):
     """Create a mutated child strategy from a parent."""
-    state = load_state()
-    parent = None
-    for s in state["strategies"]:
-        if s["id"] == parent_id:
-            parent = s
-            break
-    if not parent:
-        print(json.dumps({"error": f"Strategy {parent_id} not found"}))
-        sys.exit(1)
+    with locked_state() as state:
+        parent = None
+        for s in state["strategies"]:
+            if s["id"] == parent_id:
+                parent = s
+                break
+        if not parent:
+            print(json.dumps({"error": f"Strategy {parent_id} not found"}))
+            sys.exit(1)
 
-    sid = _next_sid(state)
-    child = {
-        "id": sid,
-        "name": name,
-        "approach": approach,
-        "hypothesis": f"Mutation of {parent_id}: {parent['name']}",
-        "fitness": 0.0,
-        "attempts": 0,
-        "successes": 0,
-        "generation": parent["generation"] + 1,
-        "created": now(),
-        "parents": [parent_id],
-        "status": "CANDIDATE",
-    }
-    state["strategies"].append(child)
-    save_state(state)
+        sid = _next_sid(state)
+        child = {
+            "id": sid,
+            "name": name,
+            "approach": approach,
+            "hypothesis": f"Mutation of {parent_id}: {parent['name']}",
+            "fitness": 0.0,
+            "attempts": 0,
+            "successes": 0,
+            "generation": parent["generation"] + 1,
+            "created": now(),
+            "parents": [parent_id],
+            "status": "CANDIDATE",
+        }
+        state["strategies"].append(child)
     print(json.dumps({"status": "mutated", "parent": parent_id, "child": child}))
 
 
 def cmd_crossover(id1: str, id2: str, name: str):
     """Create a new strategy by combining two parent strategies."""
-    state = load_state()
-    parent1 = None
-    parent2 = None
-    for s in state["strategies"]:
-        if s["id"] == id1:
-            parent1 = s
-        if s["id"] == id2:
-            parent2 = s
-    if not parent1 or not parent2:
-        missing = id1 if not parent1 else id2
-        print(json.dumps({"error": f"Strategy {missing} not found"}))
-        sys.exit(1)
+    with locked_state() as state:
+        parent1 = None
+        parent2 = None
+        for s in state["strategies"]:
+            if s["id"] == id1:
+                parent1 = s
+            if s["id"] == id2:
+                parent2 = s
+        if not parent1 or not parent2:
+            missing = id1 if not parent1 else id2
+            print(json.dumps({"error": f"Strategy {missing} not found"}))
+            sys.exit(1)
 
-    sid = _next_sid(state)
-    child = {
-        "id": sid,
-        "name": name,
-        "approach": f"Crossover of [{parent1['name']}] × [{parent2['name']}]",
-        "hypothesis": f"Combining successful elements of {id1} and {id2}",
-        "fitness": 0.0,
-        "attempts": 0,
-        "successes": 0,
-        "generation": max(parent1["generation"], parent2["generation"]) + 1,
-        "created": now(),
-        "parents": [id1, id2],
-        "status": "CANDIDATE",
-    }
-    state["strategies"].append(child)
-    save_state(state)
+        sid = _next_sid(state)
+        child = {
+            "id": sid,
+            "name": name,
+            "approach": f"Crossover of [{parent1['name']}] × [{parent2['name']}]",
+            "hypothesis": f"Combining successful elements of {id1} and {id2}",
+            "fitness": 0.0,
+            "attempts": 0,
+            "successes": 0,
+            "generation": max(parent1["generation"], parent2["generation"]) + 1,
+            "created": now(),
+            "parents": [id1, id2],
+            "status": "CANDIDATE",
+        }
+        state["strategies"].append(child)
     print(json.dumps({"status": "crossover", "parents": [id1, id2], "child": child}))
 
 
@@ -728,6 +729,7 @@ def cmd_cull(max_pop: int = MAX_POPULATION):
     to_cull = len(active) - max_pop
     culled = []
 
+    culled_ids = set()
     for s in active[:to_cull]:
         # Don't cull strategies that haven't been tested enough
         if s["attempts"] < 2:
@@ -737,8 +739,9 @@ def cmd_cull(max_pop: int = MAX_POPULATION):
         s["extinction_reason"] = f"Culled: Wilson lower={wilson:.3f}, population overflow"
         s["extinct_at"] = now()
         culled.append(s["id"])
-        state["strategies"].remove(s)
+        culled_ids.add(s["id"])
         state["graveyard"].append(s)
+    state["strategies"] = [s for s in state["strategies"] if s["id"] not in culled_ids]
 
     save_state(state)
     print(json.dumps({
@@ -952,7 +955,8 @@ def cmd_import():
         type_errors = []
         for key, expected in REQUIRED_SCHEMA.items():
             if not isinstance(data[key], expected):
-                type_errors.append(f"{key}: expected {expected.__name__ if isinstance(expected, type) else expected}, got {type(data[key]).__name__}")
+                expected_name = expected.__name__ if isinstance(expected, type) else "/".join(t.__name__ for t in expected)
+                type_errors.append(f"{key}: expected {expected_name}, got {type(data[key]).__name__}")
         if type_errors:
             print(json.dumps({"error": f"Type validation failed: {'; '.join(type_errors)}"}))
             sys.exit(1)

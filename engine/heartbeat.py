@@ -132,10 +132,25 @@ def check_health() -> dict:
     checks["cortex_db"] = {"ok": True, "exists": cortex_db.exists()}
 
     # 5. Lock file not stale (older than 5 minutes = likely stale)
+    # Only report stale if the lock is actually held by another process
     lock_file = STATE_DIR / ".lock"
     if lock_file.exists():
-        age = time.time() - lock_file.stat().st_mtime
-        checks["lock"] = {"ok": age < 300, "age_seconds": round(age)}
+        import fcntl
+        try:
+            test_fd = open(lock_file, "w")
+            try:
+                fcntl.flock(test_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Lock acquired — no one else holds it, so it's not stale
+                fcntl.flock(test_fd, fcntl.LOCK_UN)
+                checks["lock"] = {"ok": True}
+            except (OSError, IOError):
+                # Lock is held by another process — check age
+                age = time.time() - lock_file.stat().st_mtime
+                checks["lock"] = {"ok": age < 300, "age_seconds": round(age)}
+            finally:
+                test_fd.close()
+        except OSError:
+            checks["lock"] = {"ok": True}
     else:
         checks["lock"] = {"ok": True}
 
@@ -192,9 +207,12 @@ def cmd_tick():
     due = get_due_tasks(state)
     due_names = [t["name"] for t in due]
 
-    # Mark scheduled tasks as run (update last_run_epoch)
+    # Build set of only scheduled task names that are due (exclude queued one-shots)
+    due_scheduled_names = {t["name"] for t in state.get("scheduled_tasks", []) if _is_due(t, current)}
+
+    # Mark only scheduled tasks that are actually due (not queued one-shots with same name)
     for task in state.get("scheduled_tasks", []):
-        if task["name"] in due_names:
+        if task["name"] in due_scheduled_names:
             task["last_run_epoch"] = current
             task["run_count"] = task.get("run_count", 0) + 1
 

@@ -12,6 +12,7 @@ Usage:
     python engine/audit.py tail [N]
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -95,22 +96,31 @@ def cmd_log(event_type: str, json_data_str: str) -> None:
 
     os.makedirs(STATE_DIR, exist_ok=True)
 
-    entry = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "event_type": event_type,
-        "data": data,
-        "prev_hash": _prev_hash(AUDIT_LOG_PATH),
-    }
-
-    line = json.dumps(entry, separators=(",", ":"))
-
-    # Atomic-ish append: open in append mode, write the line, fsync.
-    fd = os.open(AUDIT_LOG_PATH, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    # Hold an exclusive lock to prevent concurrent processes from breaking the hash chain
+    lock_path = os.path.join(STATE_DIR, ".audit.lock")
+    lock_fd = open(lock_path, "w")
     try:
-        os.write(fd, (line + "\n").encode("utf-8"))
-        os.fsync(fd)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "event_type": event_type,
+            "data": data,
+            "prev_hash": _prev_hash(AUDIT_LOG_PATH),
+        }
+
+        line = json.dumps(entry, separators=(",", ":"))
+
+        # Atomic append under lock: read prev_hash and write are now serialized
+        fd = os.open(AUDIT_LOG_PATH, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            os.write(fd, (line + "\n").encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
     finally:
-        os.close(fd)
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
 
     print(json.dumps({"ok": True, "event_type": event_type, "hash": _hash_line(line)}))
 
