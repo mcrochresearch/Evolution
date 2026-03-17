@@ -18,68 +18,85 @@ CMD="${1:-help}"
 shift || true
 
 CHECKPOINT_TAG_PREFIX="evolution-checkpoint"
+STATE_DIR="evolution/.state"
+CHECKPOINT_FILE="$STATE_DIR/checkpoints.jsonl"
 
 case "$CMD" in
     create)
         MESSAGE="${1:-Cycle checkpoint}"
+
         # Stage current changes
         git add -A 2>/dev/null || true
-        # Create a commit as checkpoint
-        HASH=$(git stash create 2>/dev/null || echo "")
-        if [[ -z "$HASH" ]]; then
-            # No changes to stash, record current HEAD
-            HASH=$(git rev-parse HEAD 2>/dev/null || echo "none")
-        fi
+        # Record current HEAD
+        HASH=$(git rev-parse HEAD 2>/dev/null || echo "none")
         TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
         TAG="${CHECKPOINT_TAG_PREFIX}-${TIMESTAMP}"
 
-        # Store checkpoint info
-        mkdir -p evolution/.state
-        echo "{\"tag\":\"$TAG\",\"hash\":\"$HASH\",\"head\":\"$(git rev-parse HEAD 2>/dev/null || echo none)\",\"message\":\"$MESSAGE\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> evolution/.state/checkpoints.jsonl
+        # Also stash any uncommitted changes so we can restore them
+        STASH_HASH=$(git stash create 2>/dev/null || echo "")
 
-        echo "{\"status\":\"created\",\"tag\":\"$TAG\",\"hash\":\"$HASH\"}"
+        # Store checkpoint info
+        mkdir -p "$STATE_DIR"
+        echo "{\"tag\":\"$TAG\",\"head\":\"$HASH\",\"stash\":\"${STASH_HASH:-none}\",\"message\":\"$MESSAGE\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$CHECKPOINT_FILE"
+
+        echo "{\"status\":\"created\",\"tag\":\"$TAG\",\"head\":\"$HASH\"}"
         ;;
 
     revert)
-        if [[ ! -f evolution/.state/checkpoints.jsonl ]]; then
-            echo '{"error":"No checkpoints found"}'
+        if [[ ! -f "$CHECKPOINT_FILE" ]]; then
+            echo '{"error":"No checkpoints found. Create a checkpoint first."}'
             exit 1
         fi
 
         # Get the last checkpoint
-        LAST=$(tail -1 evolution/.state/checkpoints.jsonl)
+        LAST=$(tail -1 "$CHECKPOINT_FILE")
         HEAD_AT_CHECKPOINT=$(echo "$LAST" | python3 -c "import sys,json; print(json.load(sys.stdin)['head'])" 2>/dev/null || echo "")
 
         if [[ -z "$HEAD_AT_CHECKPOINT" || "$HEAD_AT_CHECKPOINT" == "none" ]]; then
-            echo '{"error":"Cannot determine checkpoint HEAD"}'
+            echo '{"error":"Cannot determine checkpoint HEAD. Checkpoint may be corrupted."}'
             exit 1
         fi
 
-        # Reset to checkpoint state
-        git checkout "$HEAD_AT_CHECKPOINT" -- . 2>/dev/null || git reset --hard "$HEAD_AT_CHECKPOINT" 2>/dev/null
-        echo "{\"status\":\"reverted\",\"to\":\"$HEAD_AT_CHECKPOINT\"}"
+        # Safer revert: checkout files from checkpoint instead of hard reset
+        # This preserves git history while restoring file contents
+        if git checkout "$HEAD_AT_CHECKPOINT" -- . 2>/dev/null; then
+            echo "{\"status\":\"reverted\",\"to\":\"$HEAD_AT_CHECKPOINT\",\"method\":\"checkout\"}"
+        else
+            # Fallback: warn before hard reset
+            echo "{\"status\":\"reverted\",\"to\":\"$HEAD_AT_CHECKPOINT\",\"method\":\"reset\",\"warning\":\"Used hard reset as fallback\"}" >&2
+            git reset --hard "$HEAD_AT_CHECKPOINT" 2>/dev/null
+            echo "{\"status\":\"reverted\",\"to\":\"$HEAD_AT_CHECKPOINT\",\"method\":\"reset\"}"
+        fi
         ;;
 
     list)
-        if [[ ! -f evolution/.state/checkpoints.jsonl ]]; then
+        if [[ ! -f "$CHECKPOINT_FILE" ]]; then
             echo '{"checkpoints":[]}'
             exit 0
         fi
-        echo '{"checkpoints":['
-        tail -10 evolution/.state/checkpoints.jsonl | while IFS= read -r line; do
-            echo "  $line,"
+
+        # Build proper JSON array
+        echo -n '{"checkpoints":['
+        FIRST=true
+        tail -10 "$CHECKPOINT_FILE" | while IFS= read -r line; do
+            if [[ "$FIRST" == "true" ]]; then
+                FIRST=false
+            else
+                echo -n ","
+            fi
+            echo -n "$line"
         done
         echo ']}'
         ;;
 
     diff)
-        if [[ ! -f evolution/.state/checkpoints.jsonl ]]; then
-            echo '{"error":"No checkpoints"}'
+        if [[ ! -f "$CHECKPOINT_FILE" ]]; then
+            echo '{"error":"No checkpoints found"}'
             exit 1
         fi
-        LAST=$(tail -1 evolution/.state/checkpoints.jsonl)
+        LAST=$(tail -1 "$CHECKPOINT_FILE")
         HEAD_AT=$(echo "$LAST" | python3 -c "import sys,json; print(json.load(sys.stdin)['head'])" 2>/dev/null || echo "HEAD~1")
-        git diff "$HEAD_AT" --stat 2>/dev/null || echo "No diff available"
+        git diff "$HEAD_AT" --stat 2>/dev/null || echo '{"error":"No diff available"}'
         ;;
 
     help|*)

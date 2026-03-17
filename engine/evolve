@@ -16,6 +16,13 @@
 #   ./engine/evolve plateau          Check for stagnation
 #   ./engine/evolve diversity        Check population diversity
 #   ./engine/evolve recommend        Get strategic recommendations
+#   ./engine/evolve correlations     Strategy-outcome causal analysis
+#   ./engine/evolve crossover        Combine two strategies
+#   ./engine/evolve cull             Remove weakest strategies
+#   ./engine/evolve resurrect        Bring back graveyard strategy
+#   ./engine/evolve reset            Clear all state
+#   ./engine/evolve export           Backup state to stdout
+#   ./engine/evolve import           Restore state from stdin
 #   ./engine/evolve skill-extract    Extract a new skill
 #   ./engine/evolve skill-list       List extracted skills
 #   ./engine/evolve skill-promote    Promote skill to .claude/skills/
@@ -50,8 +57,26 @@ case "$CMD" in
     mutate)
         python3 "$ENGINE_DIR/state.py" mutate "$@"
         ;;
+    crossover)
+        python3 "$ENGINE_DIR/state.py" crossover "$@"
+        ;;
+    cull)
+        python3 "$ENGINE_DIR/state.py" cull "$@"
+        ;;
+    resurrect)
+        python3 "$ENGINE_DIR/state.py" resurrect "$@"
+        ;;
     crystallize)
         python3 "$ENGINE_DIR/state.py" crystallize
+        ;;
+    reset)
+        python3 "$ENGINE_DIR/state.py" reset
+        ;;
+    export)
+        python3 "$ENGINE_DIR/state.py" export
+        ;;
+    import)
+        python3 "$ENGINE_DIR/state.py" import
         ;;
 
     # --- Fitness ---
@@ -95,6 +120,9 @@ case "$CMD" in
     plateau)
         python3 "$ENGINE_DIR/state.py" plateau
         ;;
+    correlations)
+        python3 "$ENGINE_DIR/analyze.py" correlations
+        ;;
 
     # --- SkillForge ---
     skill-extract)
@@ -117,14 +145,16 @@ case "$CMD" in
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
         echo ""
-        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate | crystallize"
+        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate"
+        echo "             crossover | cull | resurrect | crystallize | reset | export | import"
         echo "Fitness:     fitness"
         echo "Checkpoints: checkpoint | revert | checkpoints | diff"
-        echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity | recommend | plateau"
+        echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
+        echo "             recommend | plateau | correlations"
         echo "SkillForge:  skill-extract | skill-use | skill-promote | skill-list | skill-stats"
         ;;
     *)
-        echo "Unknown command: $CMD. Run './engine/evolve help' for usage." >&2
+        echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
         exit 1
         ;;
 esac
