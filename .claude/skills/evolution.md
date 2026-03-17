@@ -82,6 +82,37 @@ Evolution has an executable engine. Use these commands via Bash:
 ./engine/evolve audit log "cycle" '{"data":1}' # Log event
 ./engine/evolve audit-verify                   # Verify hash chain integrity
 
+# Heartbeat (persistent self-check loop)
+./engine/evolve heartbeat-tick                 # Run one heartbeat tick (health + due tasks)
+./engine/evolve heartbeat-schedule "mem_consolidate" "daily"  # Schedule recurring task
+./engine/evolve heartbeat-schedule "analyze" "every_4h"       # Cadences: every_tick, hourly, every_4h, daily, weekly
+./engine/evolve heartbeat-queue "run_retro"    # Queue one-shot task for next tick
+./engine/evolve heartbeat-status               # Show heartbeat state + health
+./engine/evolve heartbeat-due                  # List tasks due now
+
+# Self-Recovery (structured failure escalation)
+./engine/evolve recover-attempt "task_name" "command" ["fallback_cmd"]  # Execute with retry+fallback+quarantine
+./engine/evolve recover-quarantine "task_name" "reason"   # Manually quarantine
+./engine/evolve recover-release "task_name"               # Release from quarantine
+./engine/evolve recover-status                            # Show quarantined tasks + stats
+
+# Decision Matrix (tiered autonomy)
+./engine/evolve decide-classify "code_change_small"       # Returns tier: AUTO/REVIEW/HALT
+./engine/evolve decide-classify "git_push" '{"branch":"main"}'  # With context
+./engine/evolve decide-rules                              # List all rules by tier
+./engine/evolve decide-add-rule "my_action" "REVIEW"      # Add custom rule
+./engine/evolve decide-approve "action_id"                # Approve pending action
+./engine/evolve decide-deny "action_id" "reason"          # Deny pending action
+./engine/evolve decide-pending                            # Show pending approvals
+
+# Outcome Records (structured action outcomes)
+./engine/evolve outcome-log "code_change" "added auth middleware" "success" '{"strategy":"S001","fitness":0.75}'
+./engine/evolve outcome-log "api_call" "rate limited on search" "failure" '{"error":"429"}'
+./engine/evolve outcome-query --type code_change --outcome success --limit 20
+./engine/evolve outcome-stats                             # Aggregate stats by type/outcome
+./engine/evolve outcome-retro --days 7                    # Weekly retrospective
+./engine/evolve outcome-lessons                           # Extract statistically-backed lessons
+
 # State management
 ./engine/evolve reset --force                  # Clear all state (requires --force)
 ./engine/evolve export > backup.json           # Backup
@@ -99,7 +130,15 @@ Evolution has an executable engine. Use these commands via Bash:
 3. **Check for existing state**: Read `evolution/cortex/working.md`. If it exists, you're resuming — load it and `evolution/nucleus/goal.md` to restore context.
 4. **Load persistent memory**: Run `./engine/evolve mem-core` to load core memories (decisions, patterns, warnings from previous sessions). Run `./engine/evolve mem-resume` to check for a session checkpoint. If a checkpoint exists, resume from where you left off.
 5. **Recall relevant memories**: Run `./engine/evolve mem-recall "<goal keywords>"` to find any memories from previous sessions that are relevant to this goal.
-6. **If fresh start**: Create the `evolution/` directory structure. Write the goal to `evolution/nucleus/goal.md`. Auto-detect project type and set up fitness commands.
+6. **Run heartbeat**: `./engine/evolve heartbeat-tick` to check system health and process any due tasks.
+7. **Check recovery state**: `./engine/evolve recover-status` to see if any tasks are quarantined from a previous session.
+8. **Load lessons**: If `evolution/.state/lessons.json` exists, read it — these are statistically-backed patterns about what works and what doesn't. Apply them.
+9. **If fresh start**: Create the `evolution/` directory structure. Write the goal to `evolution/nucleus/goal.md`. Auto-detect project type and set up fitness commands. Schedule heartbeat tasks:
+   ```bash
+   ./engine/evolve heartbeat-schedule "mem_consolidate" "daily"
+   ./engine/evolve heartbeat-schedule "run_retro" "weekly"
+   ./engine/evolve heartbeat-schedule "audit_verify" "daily"
+   ```
 
 ## GOAL DECOMPOSITION
 
@@ -188,6 +227,7 @@ Next: [one sentence — what to try next based on this]
 **Every cycle** (fast, minimal writes):
 - `evolution/cortex/working.md` — current state, active strategy, cycle count, next action
 - `evolution/nucleus/cycle.md` — append one-line cycle log
+- `./engine/evolve outcome-log "<type>" "<description>" "<outcome>" '<data>'` — structured outcome record
 
 **On metacognition triggers** (event-driven, not fixed schedule):
 The engine outputs `meta_triggers` in cycle results when analysis is needed:
@@ -208,12 +248,20 @@ The engine outputs `meta_triggers` in cycle results when analysis is needed:
   - `./engine/evolve mem-store warning "never do X because Y" --importance 0.9`
 - **Save checkpoint**: `./engine/evolve mem-checkpoint --goal "..." --strategy "SXXX" --cycle N --fitness 0.XX`
 
-**Every 10 cycles** (memory maintenance):
+**Every 10 cycles** (memory maintenance + heartbeat):
+- Run `./engine/evolve heartbeat-tick` — check health, process due tasks
 - Run `./engine/evolve mem-consolidate` to deduplicate and decay old memories
 - Run `./engine/evolve mem-core --refresh` to regenerate the core memory file
 
+**Every 50 cycles or weekly** (retrospective + lessons):
+- Run `./engine/evolve outcome-retro --days 7` — analyze what's working and what's not
+- Run `./engine/evolve outcome-lessons` — extract statistically-backed lessons to `evolution/.state/lessons.json`
+- Review lessons and apply them (adjust strategies, add filters, change approach)
+
 **On session end or goal completion**:
 - Store a goal-outcome memory: `./engine/evolve mem-store goal-outcome "Goal X: achieved/failed. Key learnings: ..." --importance 0.9`
+- Run `./engine/evolve outcome-retro` for final retrospective
+- Run `./engine/evolve outcome-lessons` to crystallize lessons for future sessions
 - Run `./engine/evolve mem-consolidate` for final cleanup
 
 ---
@@ -224,17 +272,110 @@ The engine outputs `meta_triggers` in cycle results when analysis is needed:
 
 | When | Read | Write |
 |------|------|-------|
-| Session start | mem-core, mem-resume, mem-recall | |
-| Every cycle | working.md, goal.md | working.md, cycle.md |
+| Session start | mem-core, mem-resume, mem-recall, heartbeat-tick, recover-status, lessons.json | |
+| Every cycle | working.md, goal.md | working.md, cycle.md, outcome-log |
 | Selecting strategy | + population.md | |
 | After failure | + graveyard.md, reflections.md, mem-recall | reflections.md |
 | Every 5 cycles | + episodic.md, patterns.md | episodic.md, patterns.md |
-| Every 10 cycles | | mem-consolidate, mem-core --refresh |
+| Every 10 cycles | | mem-consolidate, mem-core --refresh, heartbeat-tick |
+| Every 50 cycles | | outcome-retro, outcome-lessons |
 | On milestone | + semantic.md, procedural.md | semantic.md, procedural.md, mem-store |
 | When stuck | + frontiers.md, hypotheses.md, mem-recall | hypotheses.md |
 | On pivot | + graveyard.md (resurrect?) | population.md |
 | On learning | | mem-store (decision/pattern/warning/bug-fix) |
 | On session end | | mem-store goal-outcome, mem-checkpoint, mem-consolidate |
+
+---
+
+## HEARTBEAT — The Spine of Autonomy
+
+The heartbeat is a periodic self-check that runs alongside the evolution loop. It ensures the system stays alive, healthy, and on-schedule.
+
+**When to tick**: Run `./engine/evolve heartbeat-tick` at the start of every session and every 10 cycles. The tick:
+1. Checks system health (state files, disk, locks, memory DB)
+2. Returns tasks that are due (scheduled + queued)
+3. Logs liveness — so silent failures are detectable
+
+**Scheduled tasks**: Set up recurring work during initialization:
+```bash
+./engine/evolve heartbeat-schedule "mem_consolidate" "daily"
+./engine/evolve heartbeat-schedule "run_retro" "weekly"
+./engine/evolve heartbeat-schedule "analyze" "every_4h"
+./engine/evolve heartbeat-schedule "audit_verify" "daily"
+```
+
+When `heartbeat-tick` returns `due_tasks`, execute them. This replaces ad-hoc "every N cycles" logic with deterministic scheduling.
+
+**Alerts**: If `consecutive_unhealthy >= 3`, the heartbeat emits `CRITICAL` alerts. Act on these immediately — something is fundamentally broken.
+
+## SELF-RECOVERY PROTOCOL
+
+One failure should never freeze the entire system. When an operation might fail (API calls, external commands, network ops), wrap it with the recovery protocol:
+
+```bash
+# Basic: retry with exponential backoff (1s, 2s, 4s), then quarantine
+./engine/evolve recover-attempt "fitness_check" "./engine/evolve fitness"
+
+# With fallback: if retries fail, try simpler alternative
+./engine/evolve recover-attempt "web_search" "curl api.search.com" "curl backup.search.com"
+```
+
+The escalation path:
+1. **RETRY** — 3 attempts with exponential backoff (1s, 2s, 4s)
+2. **FALLBACK** — Try cheaper/simpler alternative (if provided)
+3. **QUARANTINE** — Isolate the task, alert via heartbeat, **continue all other work**
+4. **AUTO-RELEASE** — Quarantined tasks auto-release after 24 hours
+
+Check quarantine before retrying previously failed operations:
+```bash
+./engine/evolve recover-status   # See what's quarantined
+./engine/evolve recover-release "task_name"  # Manual release when root cause is fixed
+```
+
+## DECISION MATRIX — Tiered Autonomy
+
+Not every action should be auto-executed. Before risky operations, classify them:
+
+```bash
+result=$(./engine/evolve decide-classify "code_change_large" '{"lines":150}')
+# Returns: {"tier": "REVIEW", "proceed": false, ...}
+```
+
+**Three tiers:**
+
+| Tier | Actions | Behavior |
+|------|---------|----------|
+| **AUTO** | health checks, fitness, memory ops, checkpoints, analysis, small code changes, tests | Execute immediately |
+| **REVIEW** | large code changes, dependency changes, config changes, git push, file deletes, external APIs | Queue for review, continue other work |
+| **HALT** | force push, rebase, credential changes, infrastructure, database migrations, production deploy | Hard stop, wait for explicit approval |
+
+In Evolution's autonomous mode, AUTO actions execute freely. REVIEW actions execute with a logged record (the agent is trusted but accountable). HALT actions should genuinely pause.
+
+Customize rules: `./engine/evolve decide-add-rule "my_action" "AUTO"`
+
+## OUTCOME RECORDS — Structured Learning
+
+Every significant action gets a structured outcome record:
+
+```bash
+# After any action, log the outcome
+./engine/evolve outcome-log "code_change" "added rate limiting to API" "success" '{"strategy":"S001","fitness_delta":0.05}'
+./engine/evolve outcome-log "debug" "investigated flaky test" "failure" '{"error":"timing issue","hours_spent":0.5}'
+```
+
+**When to log**: After every cycle's VERIFY step, log an outcome. This builds the dataset that powers retrospectives and lessons.
+
+**Weekly retrospective** (run every Monday or every 50 cycles):
+```bash
+./engine/evolve outcome-retro --days 7
+```
+Returns: best/worst action types, failure keywords, concrete recommendations.
+
+**Extract lessons** (run every 100 cycles or on sub-goal completion):
+```bash
+./engine/evolve outcome-lessons
+```
+Writes to `evolution/.state/lessons.json` — statistically significant patterns about what works and what doesn't. Load these alongside skills to adapt behavior.
 
 ---
 

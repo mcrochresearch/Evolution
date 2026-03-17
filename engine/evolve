@@ -203,6 +203,86 @@ case "$CMD" in
         python3 "$ENGINE_DIR/audit.py" verify
         ;;
 
+    # --- Heartbeat ---
+    heartbeat)
+        python3 "$ENGINE_DIR/heartbeat.py" "$@"
+        ;;
+    heartbeat-tick)
+        python3 "$ENGINE_DIR/heartbeat.py" tick
+        ;;
+    heartbeat-schedule)
+        python3 "$ENGINE_DIR/heartbeat.py" schedule "$@"
+        ;;
+    heartbeat-queue)
+        python3 "$ENGINE_DIR/heartbeat.py" queue "$@"
+        ;;
+    heartbeat-status)
+        python3 "$ENGINE_DIR/heartbeat.py" status
+        ;;
+    heartbeat-due)
+        python3 "$ENGINE_DIR/heartbeat.py" due
+        ;;
+
+    # --- Self-Recovery ---
+    recover)
+        python3 "$ENGINE_DIR/recover.py" "$@"
+        ;;
+    recover-attempt)
+        python3 "$ENGINE_DIR/recover.py" attempt "$@"
+        ;;
+    recover-quarantine)
+        python3 "$ENGINE_DIR/recover.py" quarantine "$@"
+        ;;
+    recover-release)
+        python3 "$ENGINE_DIR/recover.py" release "$@"
+        ;;
+    recover-status)
+        python3 "$ENGINE_DIR/recover.py" status
+        ;;
+
+    # --- Decision Matrix ---
+    decide)
+        python3 "$ENGINE_DIR/decision.py" "$@"
+        ;;
+    decide-classify)
+        python3 "$ENGINE_DIR/decision.py" classify "$@"
+        ;;
+    decide-rules)
+        python3 "$ENGINE_DIR/decision.py" list-rules
+        ;;
+    decide-add-rule)
+        python3 "$ENGINE_DIR/decision.py" add-rule "$@"
+        ;;
+    decide-approve)
+        python3 "$ENGINE_DIR/decision.py" approve "$@"
+        ;;
+    decide-deny)
+        python3 "$ENGINE_DIR/decision.py" deny "$@"
+        ;;
+    decide-pending)
+        python3 "$ENGINE_DIR/decision.py" pending
+        ;;
+
+    # --- Outcome Records ---
+    outcome)
+        python3 "$ENGINE_DIR/outcomes.py" "$@"
+        ;;
+    outcome-log)
+        python3 "$ENGINE_DIR/outcomes.py" log "$@"
+        ;;
+    outcome-query)
+        python3 "$ENGINE_DIR/outcomes.py" query "$@"
+        ;;
+    outcome-stats)
+        python3 "$ENGINE_DIR/outcomes.py" stats "$@"
+        ;;
+    outcome-retro)
+        python3 "$ENGINE_DIR/outcomes.py" retro "$@"
+        ;;
+    outcome-lessons)
+        python3 "$ENGINE_DIR/outcomes.py" lessons
+        ;;
+
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -220,6 +300,14 @@ case "$CMD" in
         echo "             forecast-accuracy"
         echo "Guard:       guard | test-count"
         echo "Audit:       audit | audit-verify"
+        echo "Heartbeat:   heartbeat | heartbeat-tick | heartbeat-schedule | heartbeat-queue"
+        echo "             heartbeat-status | heartbeat-due"
+        echo "Recovery:    recover | recover-attempt | recover-quarantine | recover-release"
+        echo "             recover-status"
+        echo "Decisions:   decide | decide-classify | decide-rules | decide-add-rule"
+        echo "             decide-approve | decide-deny | decide-pending"
+        echo "Outcomes:    outcome | outcome-log | outcome-query | outcome-stats"
+        echo "             outcome-retro | outcome-lessons"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
