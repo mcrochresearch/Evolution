@@ -22,8 +22,12 @@ set -euo pipefail
 PROJECT_DIR="${1:-.}"
 cd "$PROJECT_DIR"
 
-# --- Configuration ---
-TIMEOUT_SEC="${EVOLUTION_TIMEOUT:-120}"  # 2 minute default, configurable
+# --- Configuration (all overridable via environment) ---
+TIMEOUT_SEC="${EVOLUTION_TIMEOUT:-120}"    # 2 minute default
+WEIGHT_TESTS="${EVOLUTION_WEIGHT_TESTS:-0.40}"
+WEIGHT_BUILD="${EVOLUTION_WEIGHT_BUILD:-0.20}"
+WEIGHT_LINT="${EVOLUTION_WEIGHT_LINT:-0.15}"
+WEIGHT_TYPES="${EVOLUTION_WEIGHT_TYPES:-0.15}"
 
 # --- Output accumulator ---
 RESULTS=()
@@ -154,14 +158,14 @@ if [[ -f "package.json" ]]; then
         TEST_OUTPUT=$(run_with_timeout "npm test" 2>&1) && TEST_EXIT=0 || TEST_EXIT=$?
         if [[ $TEST_EXIT -eq 124 ]]; then
             add_error "Tests timed out after ${TIMEOUT_SEC}s"
-            add_result "tests" "false" "0.40" "TIMEOUT after ${TIMEOUT_SEC}s"
+            add_result "tests" "false" "$WEIGHT_TESTS" "TIMEOUT after ${TIMEOUT_SEC}s"
         else
             local_framework="jest"
             grep -q "vitest" package.json 2>/dev/null && local_framework="vitest"
             parse_test_counts "$TEST_OUTPUT" "$local_framework"
             test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
             test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
-            add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
+            add_result "tests" "$test_passed" "$WEIGHT_TESTS" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     else
         add_error "No 'test' script found in package.json"
@@ -170,22 +174,22 @@ if [[ -f "package.json" ]]; then
     # Build
     if grep -q '"build"' package.json 2>/dev/null; then
         run_with_timeout "npm run build" >/dev/null 2>&1 && BUILD_OK=true || BUILD_OK=false
-        add_result "build" "$BUILD_OK" "0.20" ""
+        add_result "build" "$BUILD_OK" "$WEIGHT_BUILD" ""
     fi
 
     # Lint
     if grep -q '"lint"' package.json 2>/dev/null; then
         run_with_timeout "npm run lint" >/dev/null 2>&1 && LINT_OK=true || LINT_OK=false
-        add_result "lint" "$LINT_OK" "0.15" ""
+        add_result "lint" "$LINT_OK" "$WEIGHT_LINT" ""
     elif command -v eslint &>/dev/null; then
         run_with_timeout "eslint . --max-warnings 0" >/dev/null 2>&1 && LINT_OK=true || LINT_OK=false
-        add_result "lint" "$LINT_OK" "0.15" ""
+        add_result "lint" "$LINT_OK" "$WEIGHT_LINT" ""
     fi
 
     # TypeScript type checking
     if [[ -f "tsconfig.json" ]] && command -v tsc &>/dev/null; then
         run_with_timeout "tsc --noEmit" >/dev/null 2>&1 && TYPES_OK=true || TYPES_OK=false
-        add_result "types" "$TYPES_OK" "0.15" ""
+        add_result "types" "$TYPES_OK" "$WEIGHT_TYPES" ""
     fi
 
 # Python
@@ -197,12 +201,12 @@ elif [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]] || [[ -f "requirements.txt
         TEST_OUTPUT=$(run_with_timeout "pytest --tb=short" 2>&1) && TEST_EXIT=0 || TEST_EXIT=$?
         if [[ $TEST_EXIT -eq 124 ]]; then
             add_error "Tests timed out after ${TIMEOUT_SEC}s"
-            add_result "tests" "false" "0.40" "TIMEOUT"
+            add_result "tests" "false" "$WEIGHT_TESTS" "TIMEOUT"
         else
             parse_test_counts "$TEST_OUTPUT" "pytest"
             test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
             test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
-            add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
+            add_result "tests" "$test_passed" "$WEIGHT_TESTS" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
         fi
     elif [[ -d "tests" ]] || [[ -d "test" ]]; then
         add_error "Test directory found but pytest not installed"
@@ -211,13 +215,13 @@ elif [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]] || [[ -f "requirements.txt
     # Lint
     if command -v ruff &>/dev/null; then
         run_with_timeout "ruff check ." >/dev/null 2>&1 && LINT_OK=true || LINT_OK=false
-        add_result "lint" "$LINT_OK" "0.15" ""
+        add_result "lint" "$LINT_OK" "$WEIGHT_LINT" ""
     fi
 
     # Types
     if command -v mypy &>/dev/null; then
         run_with_timeout "mypy ." >/dev/null 2>&1 && TYPES_OK=true || TYPES_OK=false
-        add_result "types" "$TYPES_OK" "0.15" ""
+        add_result "types" "$TYPES_OK" "$WEIGHT_TYPES" ""
     fi
 
 # Rust
@@ -227,20 +231,20 @@ elif [[ -f "Cargo.toml" ]]; then
     TEST_OUTPUT=$(run_with_timeout "cargo test" 2>&1) && TEST_EXIT=0 || TEST_EXIT=$?
     if [[ $TEST_EXIT -eq 124 ]]; then
         add_error "Tests timed out after ${TIMEOUT_SEC}s"
-        add_result "tests" "false" "0.40" "TIMEOUT"
+        add_result "tests" "false" "$WEIGHT_TESTS" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "cargo"
         test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
         test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
-        add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
+        add_result "tests" "$test_passed" "$WEIGHT_TESTS" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
     run_with_timeout "cargo build" >/dev/null 2>&1 && BUILD_OK=true || BUILD_OK=false
-    add_result "build" "$BUILD_OK" "0.20" ""
+    add_result "build" "$BUILD_OK" "$WEIGHT_BUILD" ""
 
     if command -v cargo-clippy &>/dev/null || cargo clippy --version &>/dev/null; then
         run_with_timeout "cargo clippy -- -D warnings" >/dev/null 2>&1 && LINT_OK=true || LINT_OK=false
-        add_result "lint" "$LINT_OK" "0.15" ""
+        add_result "lint" "$LINT_OK" "$WEIGHT_LINT" ""
     fi
 
 # Go
@@ -250,32 +254,32 @@ elif [[ -f "go.mod" ]]; then
     TEST_OUTPUT=$(run_with_timeout "go test ./..." 2>&1) && TEST_EXIT=0 || TEST_EXIT=$?
     if [[ $TEST_EXIT -eq 124 ]]; then
         add_error "Tests timed out after ${TIMEOUT_SEC}s"
-        add_result "tests" "false" "0.40" "TIMEOUT"
+        add_result "tests" "false" "$WEIGHT_TESTS" "TIMEOUT"
     else
         parse_test_counts "$TEST_OUTPUT" "go"
         test_passed="$([[ $TEST_EXIT -eq 0 ]] && echo true || echo false)"
         test_score=$(python3 -c "print(round($TESTS_PASSING / max($TESTS_TOTAL, 1), 4))" 2>/dev/null || echo "$([[ $TEST_EXIT -eq 0 ]] && echo 1 || echo 0)")
-        add_result "tests" "$test_passed" "0.40" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
+        add_result "tests" "$test_passed" "$WEIGHT_TESTS" "exit:$TEST_EXIT tests:$TESTS_PASSING/$TESTS_TOTAL" "$test_score"
     fi
 
     run_with_timeout "go build ./..." >/dev/null 2>&1 && BUILD_OK=true || BUILD_OK=false
-    add_result "build" "$BUILD_OK" "0.20" ""
+    add_result "build" "$BUILD_OK" "$WEIGHT_BUILD" ""
 
     run_with_timeout "go vet ./..." >/dev/null 2>&1 && LINT_OK=true || LINT_OK=false
-    add_result "lint" "$LINT_OK" "0.15" ""
+    add_result "lint" "$LINT_OK" "$WEIGHT_LINT" ""
 
 # Makefile fallback
 elif [[ -f "Makefile" ]]; then
     DETECTED_TYPE="make"
 
     if grep -q '^test:' Makefile 2>/dev/null; then
-        run_with_timeout "make test" >/dev/null 2>&1 && add_result "tests" "true" "0.40" "" || add_result "tests" "false" "0.40" ""
+        run_with_timeout "make test" >/dev/null 2>&1 && add_result "tests" "true" "$WEIGHT_TESTS" "" || add_result "tests" "false" "$WEIGHT_TESTS" ""
     fi
     if grep -q '^build:' Makefile 2>/dev/null; then
-        run_with_timeout "make build" >/dev/null 2>&1 && add_result "build" "true" "0.20" "" || add_result "build" "false" "0.20" ""
+        run_with_timeout "make build" >/dev/null 2>&1 && add_result "build" "true" "$WEIGHT_BUILD" "" || add_result "build" "false" "$WEIGHT_BUILD" ""
     fi
     if grep -q '^lint:' Makefile 2>/dev/null; then
-        run_with_timeout "make lint" >/dev/null 2>&1 && add_result "lint" "true" "0.15" "" || add_result "lint" "false" "0.15" ""
+        run_with_timeout "make lint" >/dev/null 2>&1 && add_result "lint" "true" "$WEIGHT_LINT" "" || add_result "lint" "false" "$WEIGHT_LINT" ""
     fi
 
 else
