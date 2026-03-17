@@ -45,6 +45,7 @@ Evolution isn't a prompt hack. It's a principled synthesis of the most powerful 
 | **Reflexion** | Shinn et al., 2023 | Verbal self-reflection as reinforcement signal |
 | **Tree of Thoughts** | Yao et al., 2023 | Deliberate goal decomposition with backtracking |
 | **Autoresearch** | Karpathy, 2025 | Autonomous modify → verify → keep/discard loops |
+| **Swarm Intelligence** | Kennedy & Eberhart, 1995 | Monte Carlo simulation + multi-persona consensus voting |
 | **Stigmergy** | Grassé, 1959 | Cross-session knowledge trails (ant colony inspired) |
 | **Active Learning** | Cohn et al., 1996 | Prioritizes actions by expected information gain |
 | **Curriculum Learning** | Bengio et al., 2009 | Progressive difficulty, builds on prior success |
@@ -62,6 +63,7 @@ engine/
 ├── evolve           CLI entry point — unified command interface
 ├── fitness.sh       Mechanical fitness computation (auto-detects project type)
 ├── state.py         State machine — Thompson Sampling, cycle tracking, phase detection
+├── swarm.py         Monte Carlo simulation + multi-persona swarm consensus (MiroFish)
 ├── checkpoint.sh    Git-based checkpointing and rollback
 ├── analyze.py       Metacognition — pattern mining, blind spots, velocity, diversity
 └── skillforge.py    Voyager-inspired autonomous skill extraction and promotion
@@ -176,6 +178,10 @@ The executable engine provides real computation — not prompt tricks:
 ./engine/evolve recommend                # Phase-aware strategic recommendations
 ./engine/evolve skill-extract "name" "desc" '["steps"]'  # Voyager-pattern skill creation
 ./engine/evolve skill-promote SK001      # Graduate skill to .claude/skills/
+./engine/evolve swarm-select             # Monte Carlo + swarm consensus strategy selection
+./engine/evolve swarm-simulate 500 10    # Simulate all strategies (500 runs, 10 cycle horizon)
+./engine/evolve swarm-landscape          # Map explored fitness space + coverage gaps
+./engine/evolve swarm-predict S001       # Predict trajectory for one strategy
 ```
 
 ---
@@ -200,7 +206,7 @@ Regular assistants wait for your next instruction. Evolution **figures out** the
 Autoresearch runs a fixed loop on one file with one metric. Evolution generalizes to **any goal** across **any codebase**, adds **competing strategy populations** with real Thompson Sampling, **persistent memory** that compounds across sessions, **metacognition** that detects stagnation and pivots, **hypothesis-driven exploration**, and a **SkillForge** that creates new reusable skills autonomously.
 
 ### vs. MiroFish (Swarm Intelligence)
-MiroFish simulates thousands of agents to predict outcomes. Evolution **is** the agent — it doesn't simulate intelligence, it **implements** it. Where MiroFish predicts what might happen, Evolution **makes things happen** through autonomous execution. Evolution incorporates MiroFish's swarm concepts through stigmergic cross-session learning (pheromone trails in procedural memory).
+MiroFish simulates thousands of agents to predict outcomes. Evolution **absorbs this**: the Swarm Engine (`swarm.py`) runs Monte Carlo simulations of every active strategy — building empirical transition models from historical data, projecting 500+ forward trajectories, then having 5 virtual personas (Explorer, Exploiter, Contrarian, Survivor, Strategist) independently evaluate the simulations and vote via Borda count. This isn't LLM imagination — it's **computational simulation grounded in real outcome data**. Where MiroFish predicts, Evolution predicts AND executes AND learns from the delta between prediction and reality.
 
 ### vs. Voyager / Claudeception (Skill Libraries)
 Voyager and Claudeception create skill libraries from experience. Evolution **includes** this pattern (SkillForge) but goes further: skills don't just accumulate, they **compete and evolve**. Strategies mutate, crossover, and face selection pressure. The skill library itself is a living population under evolutionary pressure.
