@@ -49,6 +49,16 @@ You have 9 specialist skill documents in `skills/`. Use them:
 
 **Write everything down. Sessions don't persist.**
 
+## Search Rule
+
+**ALL searches use SearXNG at `http://127.0.0.1:8888` — never Brave, never Google, never any external search API.**
+
+```bash
+curl -s "http://127.0.0.1:8888/search?q=YOUR+QUERY&format=json"
+```
+
+This applies to every agent in the system. No exceptions.
+
 ## Action Rules
 
 **Do freely:**

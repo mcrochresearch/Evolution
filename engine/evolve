@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+# ============================================================================
+# EVOLUTION CLI — The unified entry point
+# ============================================================================
+# A single command to interact with the entire Evolution engine.
+#
+# Usage:
+#   ./engine/evolve init "Build a REST API with auth"
+#   ./engine/evolve fitness          Run mechanical fitness check
+#   ./engine/evolve select           Pick next strategy (Thompson Sampling)
+#   ./engine/evolve cycle ...        Log a cycle
+#   ./engine/evolve checkpoint       Create a git checkpoint
+#   ./engine/evolve revert           Revert to last checkpoint
+#   ./engine/evolve status           Show dashboard
+#   ./engine/evolve analyze          Full analysis report
+#   ./engine/evolve plateau          Check for stagnation
+#   ./engine/evolve diversity        Check population diversity
+#   ./engine/evolve recommend        Get strategic recommendations
+#   ./engine/evolve correlations     Strategy-outcome correlational analysis
+#   ./engine/evolve crossover        Combine two strategies
+#   ./engine/evolve cull             Remove weakest strategies
+#   ./engine/evolve resurrect        Bring back graveyard strategy
+#   ./engine/evolve reset            Clear all state
+#   ./engine/evolve export           Backup state to stdout
+#   ./engine/evolve import           Restore state from stdin
+#   ./engine/evolve skill-extract    Extract a new skill
+#   ./engine/evolve skill-list       List extracted skills
+#   ./engine/evolve skill-promote    Promote skill to .claude/skills/
+# ============================================================================
+
+set -euo pipefail
+
+ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+    # --- Guided Mode ---
+    next)
+        python3 "$ENGINE_DIR/state.py" next
+        ;;
+    dna)
+        python3 "$ENGINE_DIR/state.py" dna
+        ;;
+
+    # --- State Management ---
+    init)
+        python3 "$ENGINE_DIR/state.py" init "$@"
+        ;;
+    status)
+        python3 "$ENGINE_DIR/state.py" status
+        ;;
+    select)
+        python3 "$ENGINE_DIR/state.py" select
+        ;;
+    cycle)
+        python3 "$ENGINE_DIR/state.py" cycle "$@"
+        ;;
+    add-strategy)
+        python3 "$ENGINE_DIR/state.py" add-strategy "$@"
+        ;;
+    extinct)
+        python3 "$ENGINE_DIR/state.py" extinct "$@"
+        ;;
+    mutate)
+        python3 "$ENGINE_DIR/state.py" mutate "$@"
+        ;;
+    crossover)
+        python3 "$ENGINE_DIR/state.py" crossover "$@"
+        ;;
+    cull)
+        python3 "$ENGINE_DIR/state.py" cull "$@"
+        ;;
+    resurrect)
+        python3 "$ENGINE_DIR/state.py" resurrect "$@"
+        ;;
+    crystallize)
+        python3 "$ENGINE_DIR/state.py" crystallize
+        ;;
+    reset)
+        python3 "$ENGINE_DIR/state.py" reset "$@"
+        ;;
+    export)
+        python3 "$ENGINE_DIR/state.py" export
+        ;;
+    import)
+        python3 "$ENGINE_DIR/state.py" import
+        ;;
+
+    # --- Fitness ---
+    fitness)
+        bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
+        ;;
+
+    # --- Checkpoints ---
+    checkpoint)
+        bash "$ENGINE_DIR/checkpoint.sh" create "$@"
+        ;;
+    revert)
+        bash "$ENGINE_DIR/checkpoint.sh" revert --confirm
+        ;;
+    checkpoints)
+        bash "$ENGINE_DIR/checkpoint.sh" list
+        ;;
+    diff)
+        bash "$ENGINE_DIR/checkpoint.sh" diff
+        ;;
+
+    # --- Analysis ---
+    analyze)
+        python3 "$ENGINE_DIR/analyze.py" report
+        ;;
+    patterns)
+        python3 "$ENGINE_DIR/analyze.py" patterns
+        ;;
+    blind-spots)
+        python3 "$ENGINE_DIR/analyze.py" blind-spots
+        ;;
+    velocity)
+        python3 "$ENGINE_DIR/analyze.py" velocity
+        ;;
+    diversity)
+        python3 "$ENGINE_DIR/analyze.py" diversity
+        ;;
+    recommend)
+        python3 "$ENGINE_DIR/analyze.py" recommend
+        ;;
+    plateau)
+        python3 "$ENGINE_DIR/state.py" plateau
+        ;;
+    correlations)
+        python3 "$ENGINE_DIR/analyze.py" correlations
+        ;;
+
+    # --- SkillForge ---
+    skill-extract)
+        python3 "$ENGINE_DIR/skillforge.py" extract "$@"
+        ;;
+    skill-use)
+        python3 "$ENGINE_DIR/skillforge.py" use "$@"
+        ;;
+    skill-promote)
+        python3 "$ENGINE_DIR/skillforge.py" promote "$@"
+        ;;
+    skill-list)
+        python3 "$ENGINE_DIR/skillforge.py" list
+        ;;
+    skill-stats)
+        python3 "$ENGINE_DIR/skillforge.py" stats
+        ;;
+
+    # --- Memory (Cortex) ---
+    memory)
+        python3 "$ENGINE_DIR/memory.py" "$@"
+        ;;
+    mem-store)
+        python3 "$ENGINE_DIR/memory.py" store "$@"
+        ;;
+    mem-recall)
+        python3 "$ENGINE_DIR/memory.py" recall "$@"
+        ;;
+    mem-core)
+        python3 "$ENGINE_DIR/memory.py" core "$@"
+        ;;
+    mem-checkpoint)
+        python3 "$ENGINE_DIR/memory.py" checkpoint "$@"
+        ;;
+    mem-resume)
+        python3 "$ENGINE_DIR/memory.py" resume
+        ;;
+    mem-consolidate)
+        python3 "$ENGINE_DIR/memory.py" consolidate
+        ;;
+    mem-stats)
+        python3 "$ENGINE_DIR/memory.py" stats
+        ;;
+
+    # --- Foresight (debate & scenario planning) ---
+    foresight)
+        python3 "$ENGINE_DIR/foresight.py" "$@"
+        ;;
+    debate)
+        python3 "$ENGINE_DIR/foresight.py" debate "$@"
+        ;;
+    premortem)
+        python3 "$ENGINE_DIR/foresight.py" premortem "$@"
+        ;;
+    backcast)
+        python3 "$ENGINE_DIR/foresight.py" backcast "$@"
+        ;;
+    forecast-eval)
+        python3 "$ENGINE_DIR/foresight.py" evaluate "$@"
+        ;;
+    forecast-accuracy)
+        python3 "$ENGINE_DIR/foresight.py" accuracy
+        ;;
+
+    # --- Guard ---
+    guard)
+        python3 "$ENGINE_DIR/guard.py" scan "$@"
+        ;;
+    test-count)
+        python3 "$ENGINE_DIR/guard.py" test-count "$@"
+        ;;
+
+    # --- Audit ---
+    audit)
+        python3 "$ENGINE_DIR/audit.py" "$@"
+        ;;
+    audit-verify)
+        python3 "$ENGINE_DIR/audit.py" verify
+        ;;
+
+    # --- Heartbeat ---
+    heartbeat)
+        python3 "$ENGINE_DIR/heartbeat.py" "$@"
+        ;;
+    heartbeat-tick)
+        python3 "$ENGINE_DIR/heartbeat.py" tick
+        ;;
+    heartbeat-schedule)
+        python3 "$ENGINE_DIR/heartbeat.py" schedule "$@"
+        ;;
+    heartbeat-queue)
+        python3 "$ENGINE_DIR/heartbeat.py" queue "$@"
+        ;;
+    heartbeat-status)
+        python3 "$ENGINE_DIR/heartbeat.py" status
+        ;;
+    heartbeat-due)
+        python3 "$ENGINE_DIR/heartbeat.py" due
+        ;;
+
+    # --- Self-Recovery ---
+    recover)
+        python3 "$ENGINE_DIR/recover.py" "$@"
+        ;;
+    recover-attempt)
+        python3 "$ENGINE_DIR/recover.py" attempt "$@"
+        ;;
+    recover-quarantine)
+        python3 "$ENGINE_DIR/recover.py" quarantine "$@"
+        ;;
+    recover-release)
+        python3 "$ENGINE_DIR/recover.py" release "$@"
+        ;;
+    recover-status)
+        python3 "$ENGINE_DIR/recover.py" status
+        ;;
+
+    # --- Decision Matrix ---
+    decide)
+        python3 "$ENGINE_DIR/decision.py" "$@"
+        ;;
+    decide-classify)
+        python3 "$ENGINE_DIR/decision.py" classify "$@"
+        ;;
+    decide-rules)
+        python3 "$ENGINE_DIR/decision.py" list-rules
+        ;;
+    decide-add-rule)
+        python3 "$ENGINE_DIR/decision.py" add-rule "$@"
+        ;;
+    decide-approve)
+        python3 "$ENGINE_DIR/decision.py" approve "$@"
+        ;;
+    decide-deny)
+        python3 "$ENGINE_DIR/decision.py" deny "$@"
+        ;;
+    decide-pending)
+        python3 "$ENGINE_DIR/decision.py" pending
+        ;;
+
+    # --- Outcome Records ---
+    outcome)
+        python3 "$ENGINE_DIR/outcomes.py" "$@"
+        ;;
+    outcome-log)
+        python3 "$ENGINE_DIR/outcomes.py" log "$@"
+        ;;
+    outcome-query)
+        python3 "$ENGINE_DIR/outcomes.py" query "$@"
+        ;;
+    outcome-stats)
+        python3 "$ENGINE_DIR/outcomes.py" stats "$@"
+        ;;
+    outcome-retro)
+        python3 "$ENGINE_DIR/outcomes.py" retro "$@"
+        ;;
+    outcome-lessons)
+        python3 "$ENGINE_DIR/outcomes.py" lessons
+        ;;
+
+    # --- Enforce (Anti-Passivity) ---
+    enforce)
+        python3 "$ENGINE_DIR/enforce.py" scan "$@"
+        ;;
+    enforce-patterns)
+        python3 "$ENGINE_DIR/enforce.py" patterns
+        ;;
+    enforce-history)
+        python3 "$ENGINE_DIR/enforce.py" history
+        ;;
+    enforce-test)
+        python3 "$ENGINE_DIR/enforce.py" test
+        ;;
+
+    # --- DNA Mutation ---
+    mutate-dna)
+        python3 "$ENGINE_DIR/mutate_dna.py" mutate
+        ;;
+    express-dna)
+        python3 "$ENGINE_DIR/mutate_dna.py" express
+        ;;
+    dna-fitness)
+        python3 "$ENGINE_DIR/mutate_dna.py" fitness
+        ;;
+    dna-status)
+        python3 "$ENGINE_DIR/mutate_dna.py" status
+        ;;
+    dna-revert)
+        python3 "$ENGINE_DIR/mutate_dna.py" revert
+        ;;
+
+    # --- Harness (Outer Loop) ---
+    harness)
+        python3 "$ENGINE_DIR/harness.py" "$@"
+        ;;
+
+    # --- Help ---
+    help|--help|-h)
+        echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
+        echo ""
+        echo "Guided:      next              (engine tells you exactly what to do)"
+        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate"
+        echo "             crossover | cull | resurrect | crystallize | reset | export | import"
+        echo "Fitness:     fitness"
+        echo "Checkpoints: checkpoint | revert | checkpoints | diff"
+        echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
+        echo "             recommend | plateau | correlations"
+        echo "SkillForge:  skill-extract | skill-use | skill-promote | skill-list | skill-stats"
+        echo "Memory:      memory | mem-store | mem-recall | mem-core | mem-checkpoint"
+        echo "             mem-resume | mem-consolidate | mem-stats"
+        echo "Foresight:   foresight | debate | premortem | backcast | forecast-eval"
+        echo "             forecast-accuracy"
+        echo "Guard:       guard | test-count"
+        echo "Audit:       audit | audit-verify"
+        echo "Heartbeat:   heartbeat | heartbeat-tick | heartbeat-schedule | heartbeat-queue"
+        echo "             heartbeat-status | heartbeat-due"
+        echo "Recovery:    recover | recover-attempt | recover-quarantine | recover-release"
+        echo "             recover-status"
+        echo "Decisions:   decide | decide-classify | decide-rules | decide-add-rule"
+        echo "             decide-approve | decide-deny | decide-pending"
+        echo "Outcomes:    outcome | outcome-log | outcome-query | outcome-stats"
+        echo "             outcome-retro | outcome-lessons"
+        echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
+        echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
+        echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
+        ;;
+    *)
+        echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
+        exit 1
+        ;;
+esac

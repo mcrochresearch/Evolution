@@ -44,6 +44,21 @@ claw logs all                       # everything
 | `memory/heartbeat-state.json` | Loop state tracker |
 | `memory/YYYY-MM-DD.md` | Daily session logs |
 
+## Search
+
+**ALL web searches MUST use SearXNG — never Brave or any other external search.**
+
+```bash
+curl -s "http://127.0.0.1:8888/search?q=YOUR+QUERY+HERE&format=json" | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+for r in data.get('results',[])[:5]:
+    print(r['title'], '|', r['url'], '|', r.get('content','')[:120])
+"
+```
+
+SearXNG runs locally at `http://127.0.0.1:8888`. No API key. No rate limits. Always use this.
+
 ## Telegram
 
 - Bot: @Shellytraderbot
