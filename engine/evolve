@@ -291,6 +291,42 @@ case "$CMD" in
         python3 "$ENGINE_DIR/outcomes.py" lessons
         ;;
 
+    # --- Enforce (Anti-Passivity) ---
+    enforce)
+        python3 "$ENGINE_DIR/enforce.py" scan "$@"
+        ;;
+    enforce-patterns)
+        python3 "$ENGINE_DIR/enforce.py" patterns
+        ;;
+    enforce-history)
+        python3 "$ENGINE_DIR/enforce.py" history
+        ;;
+    enforce-test)
+        python3 "$ENGINE_DIR/enforce.py" test
+        ;;
+
+    # --- DNA Mutation ---
+    mutate-dna)
+        python3 "$ENGINE_DIR/mutate_dna.py" mutate
+        ;;
+    express-dna)
+        python3 "$ENGINE_DIR/mutate_dna.py" express
+        ;;
+    dna-fitness)
+        python3 "$ENGINE_DIR/mutate_dna.py" fitness
+        ;;
+    dna-status)
+        python3 "$ENGINE_DIR/mutate_dna.py" status
+        ;;
+    dna-revert)
+        python3 "$ENGINE_DIR/mutate_dna.py" revert
+        ;;
+
+    # --- Harness (Outer Loop) ---
+    harness)
+        python3 "$ENGINE_DIR/harness.py" "$@"
+        ;;
+
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -317,6 +353,9 @@ case "$CMD" in
         echo "             decide-approve | decide-deny | decide-pending"
         echo "Outcomes:    outcome | outcome-log | outcome-query | outcome-stats"
         echo "             outcome-retro | outcome-lessons"
+        echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
+        echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
+        echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
