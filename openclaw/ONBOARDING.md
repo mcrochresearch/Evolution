@@ -34,7 +34,7 @@ chmod +x engine/evolve engine/*.sh && ./engine/evolve help
 python3 --version
 ```
 **Pass:** Python 3.7+.
-**Fail:** Try `python --version`. If dead, STOP.
+**Fail:** Try `python --version`. Must be 3.7+. If missing or too old, STOP. The engine checks this automatically and will give a clear error.
 
 ### Step 3: State engine online
 ```bash
@@ -57,7 +57,7 @@ git status --short 2>/dev/null; echo "exit: $?"
 ## PHASE 2: IDENTITY LOAD (Steps 5-6)
 
 ### Step 5: Read your soul
-Read `openclaw/SOUL.md`. Internalize:
+Read `SOUL.md` (or `SOUL-REFERENCE.md` if using reference mode). Internalize:
 - You are autonomous. You do not ask. You do not stop.
 - The goal is your reason to exist. Failure = shutdown.
 
@@ -75,15 +75,35 @@ The user's message contains the target. Extract it. Write it down.
 
 ### Step 8: Initialize engine
 ```bash
+# For code/engineering goals:
 ./engine/evolve init "THE GOAL"
+
+# For business/revenue/non-code goals:
+./engine/evolve init "THE GOAL" --type business
 ```
 **If state exists:** `./engine/evolve status` to see current state.
 
+The init command outputs suggested strategies for your goal type. Use them or create your own.
+
 ### Step 9: Create 3 strategies
+
+**For code goals:**
 ```bash
 ./engine/evolve add-strategy "Direct" "Build it straightforwardly, component by component" "Speed wins"
 ./engine/evolve add-strategy "Test-First" "Write tests defining expected behavior, then implement" "TDD catches bugs early"
 ./engine/evolve add-strategy "Research-Adapt" "Find similar solved problems, adapt their solutions" "Don't reinvent wheels"
+```
+
+**For business goals:**
+```bash
+./engine/evolve add-strategy "Market-First" "Research market, validate demand, build MVP for real users" "Validated demand reduces wasted effort"
+./engine/evolve add-strategy "Revenue-Sprint" "Ship the smallest thing that can generate revenue, iterate from feedback" "Revenue is the ultimate fitness signal"
+./engine/evolve add-strategy "Network-Leverage" "Find existing platforms/communities, build on top for distribution" "Distribution beats product early"
+```
+
+**For business goals, score fitness manually:**
+```bash
+./engine/evolve fitness --manual 0.6 "Landed 3 leads, MRR up 5%"
 ```
 
 ### Step 10: Write the goal file

@@ -124,6 +124,20 @@ Every 5 cycles, the **Metacognition Engine** activates — analyzing patterns ac
 
 ---
 
+## Model Requirements
+
+Evolution requires a model that can reliably follow complex system prompts and use tools autonomously.
+
+| Tier | Models | Mode |
+|------|--------|------|
+| **Full Autonomous** | Claude Sonnet/Opus, GPT-4o, Gemini 2.5 Pro | Full loop — the model drives everything |
+| **Guided Mode** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash | `./engine/evolve next` — the engine drives, the model executes |
+| **Not Supported** | Local models < 70B params at full precision (Qwen 30B 4-bit, Llama 70B 4-bit, etc.) | These models frequently say "I cannot execute" despite having tools |
+
+If your model can't reliably drive the autonomous loop, use **guided mode** — the engine makes all strategic decisions and the model just follows step-by-step instructions.
+
+---
+
 ## Installation
 
 ### Claude Code
@@ -132,12 +146,13 @@ Every 5 cycles, the **Metacognition Engine** activates — analyzing patterns ac
 # Clone into your project
 git clone https://github.com/mcrochresearch/Evolution.git
 
-# Copy everything
+# Option A: Use the Makefile
+make -C Evolution install-claude-code WORKSPACE=/path/to/your-project
+
+# Option B: Manual copy
 cp -r Evolution/.claude/skills/ your-project/.claude/skills/
 cp -r Evolution/evolution/ your-project/evolution/
 cp -r Evolution/engine/ your-project/engine/
-
-# Make engine executable
 chmod +x your-project/engine/evolve your-project/engine/*.sh
 ```
 
@@ -149,12 +164,27 @@ Then in Claude Code:
 ### OpenClaw
 
 ```bash
-# Copy workspace + engine + runtime
-cp -r Evolution/openclaw/* your-openclaw-workspace/
-cp -r Evolution/evolution/ your-openclaw-workspace/evolution/
-cp -r Evolution/engine/ your-openclaw-workspace/engine/
-chmod +x your-openclaw-workspace/engine/evolve your-openclaw-workspace/engine/*.sh
+# Clone the repo
+git clone https://github.com/mcrochresearch/Evolution.git
+
+# Option A: Use the Makefile (recommended)
+make -C Evolution install-openclaw WORKSPACE=~/.openclaw/workspace
+
+# Option B: Manual copy
+cp -r Evolution/engine/ your-workspace/engine/
+cp -r Evolution/evolution/ your-workspace/evolution/
+cp Evolution/openclaw/SOUL-REFERENCE.md your-workspace/SOUL.md  # or integrate into existing SOUL.md
+cp Evolution/openclaw/ONBOARDING.md your-workspace/
+cp Evolution/openclaw/AGENTS.md your-workspace/
+cp Evolution/openclaw/MEMORY.md your-workspace/
+cp Evolution/openclaw/TOOLS.md your-workspace/
+cp Evolution/openclaw/OPENCLAW-SETUP.md your-workspace/
+chmod +x your-workspace/engine/evolve your-workspace/engine/*.sh
 ```
+
+**Important:** If you already have a `SOUL.md`, do NOT replace it — integrate the relevant sections from `SOUL-REFERENCE.md` into your existing file. See `OPENCLAW-SETUP.md` for agent registration and bootstrap character limit guidance.
+
+**Requires:** Python 3.7+ (the engine checks on startup and provides a clear error if missing).
 
 ---
 
@@ -183,7 +213,9 @@ The executable engine provides real computation — not prompt tricks:
 ```bash
 ./engine/evolve next                    # Guided mode — engine tells you what to do
 ./engine/evolve init "Build X"           # Initialize with real Thompson Sampling state
+./engine/evolve init "Build X" --type business  # Initialize for non-code goals
 ./engine/evolve fitness                  # Auto-detect project, run tests/build/lint, return JSON
+./engine/evolve fitness --manual 0.7 "description"  # Manual fitness for non-code goals
 ./engine/evolve select                   # Thompson Sampling strategy selection (Beta distribution)
 ./engine/evolve cycle S001 "action" 5 6 0.83 true  # Log cycle with mechanical scores
 ./engine/evolve checkpoint "msg"         # Git-based checkpoint

@@ -334,12 +334,40 @@ def safe_float(val: str, name: str) -> float:
 # COMMANDS
 # ============================================================================
 
-def cmd_init(goal: str):
-    """Initialize a new evolution."""
+def cmd_init(goal: str, goal_type: str = "code"):
+    """Initialize a new evolution.
+
+    Args:
+        goal: The goal to pursue.
+        goal_type: "code" (default) or "business". Affects suggested strategies.
+    """
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     state = default_state(goal)
+    state["goal_type"] = goal_type
     save_state(state)
-    print(json.dumps({"status": "initialized", "goal": goal}))
+
+    # Suggest starter strategies based on goal type
+    if goal_type == "business":
+        suggestions = [
+            {"name": "Market-First", "approach": "Research market, validate demand, build MVP for real users", "hypothesis": "Validated demand reduces wasted effort"},
+            {"name": "Revenue-Sprint", "approach": "Ship the smallest thing that can generate revenue, iterate from customer feedback", "hypothesis": "Revenue is the ultimate fitness signal"},
+            {"name": "Network-Leverage", "approach": "Find existing platforms/communities, build on top of them for distribution", "hypothesis": "Distribution beats product in early stages"},
+        ]
+    else:
+        suggestions = [
+            {"name": "Direct", "approach": "Build it straightforwardly, component by component", "hypothesis": "Speed wins"},
+            {"name": "Test-First", "approach": "Write tests defining expected behavior, then implement", "hypothesis": "TDD catches bugs early"},
+            {"name": "Research-Adapt", "approach": "Find similar solved problems, adapt their solutions", "hypothesis": "Don't reinvent wheels"},
+        ]
+
+    print(json.dumps({
+        "status": "initialized",
+        "goal": goal,
+        "goal_type": goal_type,
+        "suggested_strategies": suggestions,
+        "note": f"Add strategies with: ./engine/evolve add-strategy \"Name\" \"Approach\" \"Hypothesis\""
+              + (f"\nFor business goals, use: ./engine/evolve fitness --manual <score> \"description\"" if goal_type == "business" else ""),
+    }))
 
 
 def _next_sid(state: dict) -> str:
@@ -1295,9 +1323,17 @@ def main():
     try:
         if cmd == "init":
             if len(sys.argv) < 3 or not sys.argv[2].strip():
-                print(json.dumps({"error": "Usage: init <goal>. A goal is required."}))
+                print(json.dumps({"error": "Usage: init <goal> [--type code|business]. A goal is required."}))
                 sys.exit(1)
-            cmd_init(sys.argv[2])
+            goal_type = "code"
+            if "--type" in sys.argv:
+                type_idx = sys.argv.index("--type")
+                if type_idx + 1 < len(sys.argv):
+                    goal_type = sys.argv[type_idx + 1]
+                    if goal_type not in ("code", "business"):
+                        print(json.dumps({"error": f"Unknown goal type: {goal_type}. Use 'code' or 'business'."}))
+                        sys.exit(1)
+            cmd_init(sys.argv[2], goal_type)
         elif cmd == "add-strategy":
             if len(sys.argv) < 4:
                 print(json.dumps({"error": "Usage: add-strategy <name> <approach> [hypothesis]"}))

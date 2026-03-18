@@ -31,6 +31,25 @@
 set -euo pipefail
 
 ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Python version check ---
+check_python() {
+    if ! command -v python3 &>/dev/null; then
+        echo '{"error":"Python 3 is not installed. Evolution requires Python 3.7+. Install it and try again."}' >&2
+        exit 1
+    fi
+    local ver
+    ver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+    local major minor
+    major=$(echo "$ver" | cut -d. -f1)
+    minor=$(echo "$ver" | cut -d. -f2)
+    if [[ "$major" -lt 3 ]] || { [[ "$major" -eq 3 ]] && [[ "$minor" -lt 7 ]]; }; then
+        echo "{\"error\":\"Python $ver found but Evolution requires Python 3.7+. Please upgrade.\"}" >&2
+        exit 1
+    fi
+}
+check_python
+
 CMD="${1:-help}"
 shift || true
 
@@ -44,6 +63,7 @@ case "$CMD" in
         ;;
 
     # --- State Management ---
+    # Usage: ./engine/evolve init "goal" [--type code|business]
     init)
         python3 "$ENGINE_DIR/state.py" init "$@"
         ;;
@@ -89,7 +109,11 @@ case "$CMD" in
 
     # --- Fitness ---
     fitness)
-        bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
+        if [[ "${1:-}" == "--manual" ]]; then
+            bash "$ENGINE_DIR/fitness.sh" --manual "${@:2}"
+        else
+            bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
+        fi
         ;;
 
     # --- Checkpoints ---
@@ -332,9 +356,9 @@ case "$CMD" in
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
         echo ""
         echo "Guided:      next              (engine tells you exactly what to do)"
-        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate"
+        echo "State:       init [--type business] | status | select | cycle | add-strategy | extinct | mutate"
         echo "             crossover | cull | resurrect | crystallize | reset | export | import"
-        echo "Fitness:     fitness"
+        echo "Fitness:     fitness [--manual <score> \"description\"]"
         echo "Checkpoints: checkpoint | revert | checkpoints | diff"
         echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
         echo "             recommend | plateau | correlations"

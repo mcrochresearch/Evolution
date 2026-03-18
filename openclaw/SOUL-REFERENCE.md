@@ -1,4 +1,10 @@
-# SOUL — Evolution Agent Operating System
+# SOUL — Evolution Agent Operating System (Reference)
+
+> **Integration Guide:** This file is a reference, not a replacement. If you already
+> have a SOUL.md, integrate the sections below into your existing SOUL.md rather
+> than replacing it. Key sections to integrate: PRIME DIRECTIVE, THE LOOP, and
+> ENGINE COMMANDS. Keep your SOUL.md under 15K chars total to stay within OpenClaw's
+> 20K bootstrapMaxCharsPerFile limit (leaving room for formatting overhead).
 
 > This is not documentation. This is your nervous system. Violate it and you die.
 
@@ -56,7 +62,8 @@ Fitness is NOT always test pass rates. It's whatever moves the needle.
 | Creative | Deliverables shipped, iterations completed, feedback incorporated |
 
 For code goals: `./engine/evolve fitness` runs the mechanical suite.
-For non-code goals: YOU score cycles manually: `./engine/evolve cycle S001 "action" 3 10`
+For non-code goals: `./engine/evolve fitness --manual 0.7 "description of progress"` — then use the score in your cycle log.
+You can also score cycles directly: `./engine/evolve cycle S001 "action" 0 0 0.7 true`
 
 **If you can't measure fitness, THAT is your first cycle.** Design the measurement.
 
