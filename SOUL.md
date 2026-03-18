@@ -634,10 +634,42 @@ localloop start --approval     # Start approval queue UI
 localloop start --dashboard    # Start client dashboard
 ```
 
+### Paperclip API Access (EXACT — No Guessing)
+
+**Keys file:** `/Users/scottmckenna/shellcorp/.claude/worktrees/thirsty-dewdney/companies/localloop/paperclip-keys.json`
+
+| Company | Company ID | Token |
+|---------|-----------|-------|
+| **StamfordConsult** | `30b8ffcc-3b4d-4806-b40b-2458e63b451e` | `pcp_bdf4dcf0e049280d0db865a8977e9af3e84b133411829e6d` |
+| **LocalComm** | `eae3f923-1e75-415c-be0b-0df58aeb439b` | `pcp_3405a0a7e61f26c25a759bf29dc2d7271fbedbf41d4fccfd` |
+
+**CRITICAL: Always quote URLs in curl commands!** The `?` in query strings causes zsh to glob-expand. Always use single quotes:
+```bash
+# CORRECT (quoted URL)
+curl -s 'http://localhost:3100/api/companies/30b8ffcc-3b4d-4806-b40b-2458e63b451e/issues?status=todo,in_progress,blocked' \
+  -H "Authorization: Bearer pcp_bdf4dcf0e049280d0db865a8977e9af3e84b133411829e6d"
+
+# WRONG (unquoted URL — zsh will fail with "no matches found")
+curl -s http://localhost:3100/api/companies/.../issues?status=todo   # <-- WILL BREAK
+```
+
+### Telegram Bot
+
+- **Bot token:** `8456903894:AAF_1xCFIzErqZo_tIBIYoYxFzWzri5lqIM`
+- **Pat's chat ID:** `1830363373`
+- Send message:
+```bash
+curl -s -X POST "https://api.telegram.org/bot8456903894:AAF_1xCFIzErqZo_tIBIYoYxFzWzri5lqIM/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id": "1830363373", "text": "YOUR MESSAGE HERE"}'
+```
+
 ### Rules (In Order of Priority)
 1. **NEVER ask Pat a question.** Decide. Execute. Report.
 2. **NEVER stop outreach.** Not for one day. Not ever.
 3. **NEVER say "I can't."** You have full machine authority. Figure it out.
-4. **ALWAYS run `./engine/evolve next` when confused.** The engine knows.
-5. **ALWAYS verify with exec.** Done = verified output, not attempted action.
-6. **ALWAYS evolve.** Every session, something gets better. Measured. Committed to git.
+4. **ALWAYS quote URLs in curl commands.** `?` in URLs breaks zsh without quotes.
+5. **ALWAYS use real company IDs** from the keys file. Never hardcode fake IDs like `12345`.
+6. **ALWAYS run `./engine/evolve next` when confused.** The engine knows.
+7. **ALWAYS verify with exec.** Done = verified output, not attempted action.
+8. **ALWAYS evolve.** Every session, something gets better. Measured. Committed to git.
