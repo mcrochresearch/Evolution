@@ -132,9 +132,21 @@ Evolution requires a model that can reliably follow complex system prompts and u
 |------|--------|------|
 | **Full Autonomous** | Claude Sonnet/Opus, GPT-4o, Gemini 2.5 Pro | Full loop — the model drives everything |
 | **Guided Mode** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash | `./engine/evolve next` — the engine drives, the model executes |
-| **Not Supported** | Local models < 70B params at full precision (Qwen 30B 4-bit, Llama 70B 4-bit, etc.) | These models frequently say "I cannot execute" despite having tools |
+| **Autopilot Mode** | Qwen 3.5 (35B-A3B MoE), Llama 8B, small local models | `--autopilot` — engine drives everything, model only writes code |
+| **Not Supported** | Models < 3B active params, heavily quantized models that can't follow any instructions | Even autopilot can't help if the model can't generate coherent code |
 
-If your model can't reliably drive the autonomous loop, use **guided mode** — the engine makes all strategic decisions and the model just follows step-by-step instructions.
+**MoE models note:** Mixture-of-Experts models like Qwen 3.5 35B-A3B have large total parameter counts but only ~3B active parameters per forward pass. These cannot follow the autonomous loop or even guided mode — use **autopilot mode** instead.
+
+For models that can't drive the autonomous loop:
+- **Guided mode** (`./engine/evolve next`): Model still needs to parse JSON and call tools
+- **Autopilot mode** (`python3 engine/harness.py --autopilot`): Engine runs the entire loop, model only generates code snippets when asked
+
+```bash
+# Autopilot with a small local model (Ollama, LM Studio, vLLM)
+python3 engine/harness.py --autopilot --goal "Build X" \
+    --provider openai --model qwen3.5:35b-a3b \
+    --endpoint http://localhost:11434/v1
+```
 
 ---
 

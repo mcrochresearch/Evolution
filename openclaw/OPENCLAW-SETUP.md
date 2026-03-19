@@ -64,7 +64,14 @@ Evolution requires a model capable of:
 
 **Recommended:** Claude Sonnet/Opus, GPT-4o, or equivalent.
 
-**Not supported:** Local models below ~70B parameters at full precision (e.g., Qwen 30B 4-bit, Llama 70B 4-bit). These models frequently respond "I cannot execute" despite having tool access. Use **guided mode** (`./engine/evolve next`) if you must use a smaller model — it reduces the autonomous decision-making burden.
+**For smaller models:** Use **guided mode** (`./engine/evolve next`) — reduces autonomous decision-making.
+
+**For very small / MoE models** (Qwen 3.5 35B-A3B, Llama 8B, etc.): Use **autopilot mode** via the harness — the engine drives the entire loop and the model only generates code when asked:
+```bash
+python3 engine/harness.py --autopilot --goal "Build X" \
+    --provider openai --model your-model \
+    --endpoint http://localhost:11434/v1
+```
 
 ## Quick Verification
 

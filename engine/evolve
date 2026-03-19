@@ -380,6 +380,7 @@ case "$CMD" in
         echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
         echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
+        echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2

@@ -49,6 +49,22 @@ MAX_CONSECUTIVE_ERRORS = 5
 CYCLE_TIMEOUT = 600  # 10 minutes per cycle
 
 # ---------------------------------------------------------------------------
+# Autopilot SOUL — ultra-minimal prompt for small models in autopilot mode
+# ---------------------------------------------------------------------------
+# In autopilot mode, the harness drives the loop. The model just writes code.
+# This prompt doesn't mention evolution, strategies, or the framework at all.
+
+AUTOPILOT_SOUL = """You are a code assistant. You receive a task description and file context.
+Your job: write or edit code to accomplish the task. Output ONLY the code changes needed.
+
+Rules:
+- Output code in ```language ... ``` blocks
+- If editing an existing file, show the file path and the change
+- If creating a new file, show the full file content
+- Be specific and complete — the code you write will be applied directly
+- Do NOT ask questions. Do NOT present options. Just write the best code you can."""
+
+# ---------------------------------------------------------------------------
 # Compressed SOUL — injected as system prompt every turn
 # ---------------------------------------------------------------------------
 # This is the 10-line version that even small models can hold in working memory.
@@ -439,6 +455,225 @@ def log_harness(event: str, data: dict = None):
 # The Harness Loop
 # ---------------------------------------------------------------------------
 
+def run_autopilot(args):
+    """Autopilot mode — the harness drives everything, model just writes code.
+
+    For ultra-small models (Qwen 3.5 35B-A3B, Llama 8B, etc.) that can't
+    follow complex system prompts or use tools autonomously. The model only
+    needs to generate code when asked.
+    """
+    # Select provider
+    if args.provider == "anthropic":
+        provider = AnthropicProvider(args.model)
+    elif args.provider == "dry-run":
+        provider = DryRunProvider(args.model)
+    else:
+        provider = OpenAICompatibleProvider(args.model, args.endpoint)
+
+    goal = args.goal
+    max_cycles = args.max_cycles
+
+    print(f"═══ EVOLUTION AUTOPILOT ═════════════════════════")
+    print(f"  Model:      {args.model}")
+    print(f"  Mode:       AUTOPILOT (engine drives, model writes code)")
+    print(f"  Goal:       {goal}")
+    print(f"  Max cycles: {max_cycles}")
+    print(f"═════════════════════════════════════════════════")
+    print(f"  The engine will drive the entire loop.")
+    print(f"  The model only receives simple coding tasks.")
+    print(f"═════════════════════════════════════════════════")
+
+    # Initialize
+    if args.resume:
+        result = run_command(f"{EVOLVE} status")
+        if result["returncode"] != 0:
+            print("ERROR: No state to resume. Use --goal to start fresh.")
+            sys.exit(1)
+    else:
+        goal_type = getattr(args, "goal_type", "code")
+        result = run_command(f'{EVOLVE} init "{goal}" --type {goal_type}')
+
+    # Add default strategies if fresh
+    if not args.resume:
+        run_command(f'{EVOLVE} add-strategy "Direct" "Build it straightforwardly" "Simple works"')
+        run_command(f'{EVOLVE} add-strategy "Test-First" "Write tests then implement" "TDD finds bugs"')
+        run_command(f'{EVOLVE} add-strategy "Research" "Study similar solutions first" "Learn before building"')
+
+    log_harness("autopilot_start", {"goal": goal, "model": args.model})
+
+    cycle = 0
+    consecutive_errors = 0
+    goal_achieved = False
+
+    while cycle < max_cycles and not goal_achieved:
+        cycle += 1
+        cycle_start = time.time()
+
+        print(f"\n{'─' * 50}")
+        print(f"  AUTOPILOT CYCLE {cycle}/{max_cycles}")
+        print(f"{'─' * 50}")
+
+        # --- ENGINE DECIDES WHAT TO DO ---
+        next_result = run_command(f"{EVOLVE} next")
+        if next_result["returncode"] != 0:
+            print(f"  Engine error: {next_result['stderr'][:200]}")
+            consecutive_errors += 1
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                break
+            continue
+        consecutive_errors = 0
+
+        engine_output = next_result["stdout"]
+        print(f"  Engine says: {engine_output[:200]}...")
+
+        # Parse engine instruction
+        try:
+            instruction = json.loads(engine_output)
+        except json.JSONDecodeError:
+            instruction = {"instruction": engine_output, "phase": "execute"}
+
+        # Check if goal achieved
+        inst_text = json.dumps(instruction).lower()
+        if "goal_achieved" in inst_text or "crystallize" in inst_text:
+            goal_achieved = True
+            break
+
+        # --- ENGINE SELECTS STRATEGY ---
+        select_result = run_command(f"{EVOLVE} select")
+        strategy_id = "S001"
+        try:
+            sel = json.loads(select_result["stdout"])
+            strategy_id = sel.get("strategy_id", sel.get("id", "S001"))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        # --- CHECKPOINT ---
+        run_command(f'{EVOLVE} checkpoint "before cycle {cycle}"')
+
+        # --- ASK MODEL FOR CODE ---
+        # Build a simple, focused prompt for the model
+        # Read current project state for context
+        file_context = ""
+        fitness_result = run_command(f"{EVOLVE} fitness")
+        try:
+            fitness = json.loads(fitness_result["stdout"])
+            file_context += f"\nCurrent fitness: {fitness.get('fitness', 'unknown')}"
+            file_context += f"\nProject type: {fitness.get('project_type', 'unknown')}"
+            errors = fitness.get("errors", [])
+            if errors:
+                file_context += f"\nCurrent errors:\n" + "\n".join(f"  - {e}" for e in errors[:5])
+        except json.JSONDecodeError:
+            pass
+
+        task_prompt = instruction.get("instruction", str(instruction))
+
+        model_prompt = f"""GOAL: {goal}
+
+CURRENT TASK: {task_prompt}
+{file_context}
+
+Write the code to accomplish the current task. Output file paths and code blocks.
+Be specific — show exact file paths and complete code changes."""
+
+        messages = [{"role": "user", "content": model_prompt}]
+
+        print(f"  Asking model: {task_prompt[:100]}...")
+        response = provider.chat(AUTOPILOT_SOUL, messages)
+
+        if response.get("error"):
+            consecutive_errors += 1
+            print(f"  API error: {response['content'][:200]}")
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                break
+            time.sleep(min(2 ** consecutive_errors, 30))
+            continue
+        consecutive_errors = 0
+
+        response_text = response["content"]
+        if args.verbose:
+            print(f"\n  MODEL OUTPUT:\n{'─' * 40}")
+            for line in response_text.split("\n")[:30]:
+                print(f"  {line}")
+
+        # --- EXTRACT AND APPLY CODE ---
+        commands = extract_commands(response_text)
+
+        if commands:
+            for cmd in commands:
+                # Safety check
+                dangerous = ["rm -rf /", "rm -rf ~", ":(){ :|:& };:", "dd if=", "mkfs", "> /dev/sd"]
+                if any(d in cmd for d in dangerous):
+                    print(f"  BLOCKED: {cmd[:60]}")
+                    continue
+                print(f"  EXEC: {cmd[:80]}")
+                result = run_command(cmd, timeout=CYCLE_TIMEOUT)
+                if args.verbose and result["stdout"]:
+                    print(f"    → {result['stdout'][:200]}")
+        else:
+            # Model output code blocks but no executable commands
+            # Try to apply them as file writes
+            code_blocks = re.findall(
+                r"(?:(?:file|path)[:\s]*)?`?([^\s`]+\.\w+)`?\s*\n```\w*\n(.*?)```",
+                response_text, re.DOTALL
+            )
+            for filepath, code in code_blocks:
+                filepath = filepath.strip("`'\"")
+                if filepath and not filepath.startswith("/"):
+                    full_path = PROJECT_DIR / filepath
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    full_path.write_text(code)
+                    print(f"  WROTE: {filepath} ({len(code)} chars)")
+
+        # --- VERIFY ---
+        fitness_result = run_command(f"{EVOLVE} fitness")
+        fitness_score = 0.0
+        tests_passing = 0
+        tests_total = 0
+        try:
+            fitness = json.loads(fitness_result["stdout"])
+            fitness_score = fitness.get("fitness", 0.0)
+            tests_passing = fitness.get("tests_passing", 0)
+            tests_total = fitness.get("tests_total", 0)
+            print(f"  FITNESS: {fitness_score:.2f} ({tests_passing}/{tests_total} tests)")
+        except json.JSONDecodeError:
+            print(f"  FITNESS: parse error")
+
+        # --- SCORE ---
+        kept = "true" if fitness_score > 0 else "false"
+        action_desc = task_prompt[:80].replace('"', "'")
+        run_command(
+            f'{EVOLVE} cycle {strategy_id} "{action_desc}" '
+            f'{tests_passing} {tests_total} {fitness_score} {kept}'
+        )
+
+        # --- REVERT IF REGRESSION ---
+        # (fitness tracking would need history — simplified: keep everything for now)
+
+        cycle_time = time.time() - cycle_start
+        log_harness("autopilot_cycle", {
+            "cycle": cycle,
+            "strategy": strategy_id,
+            "fitness": fitness_score,
+            "cycle_time_s": round(cycle_time, 1),
+            "total_tokens": provider.total_tokens,
+        })
+
+        print(f"  Cycle {cycle} done in {cycle_time:.1f}s | Tokens: {provider.total_tokens}")
+
+    # --- FINAL ---
+    print(f"\n{'═' * 50}")
+    if goal_achieved:
+        print(f"  GOAL ACHIEVED in {cycle} cycles")
+        run_command(f"{EVOLVE} crystallize")
+    elif cycle >= max_cycles:
+        print(f"  MAX CYCLES REACHED ({max_cycles})")
+    print(f"  Total tokens: {provider.total_tokens}")
+    final = run_command(f"{EVOLVE} status")
+    print(f"\n{final['stdout']}")
+    print(f"{'═' * 50}")
+    log_harness("autopilot_end", {"cycles": cycle, "goal_achieved": goal_achieved})
+
+
 def run_harness(args):
     """Main harness loop — forces autonomous execution."""
 
@@ -687,6 +922,10 @@ Examples:
   # Resume from last session
   python3 engine/harness.py --resume --model gpt-4o
 
+  # Autopilot mode for small models (engine drives, model writes code)
+  python3 engine/harness.py --autopilot --goal "Build X" --model qwen3.5 \\
+      --endpoint http://localhost:11434/v1
+
   # Dry run (test without API calls)
   python3 engine/harness.py --goal "Test" --provider dry-run --model test
         """
@@ -704,6 +943,11 @@ Examples:
                         help="Maximum cycles before stopping (default: 200)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Print full model output and command results")
+    parser.add_argument("--autopilot", action="store_true",
+                        help="Autopilot mode: engine drives everything, model only writes code. "
+                             "Use this for small models (Qwen 3.5, Llama 8B, etc.)")
+    parser.add_argument("--goal-type", choices=["code", "business"], default="code",
+                        help="Goal type for init (default: code)")
 
     args = parser.parse_args()
 
@@ -716,7 +960,12 @@ Examples:
     if not args.goal and not args.resume:
         parser.error("Either --goal or --resume is required")
 
-    run_harness(args)
+    args.goal_type = getattr(args, "goal_type", "code")
+
+    if args.autopilot:
+        run_autopilot(args)
+    else:
+        run_harness(args)
 
 
 if __name__ == "__main__":
