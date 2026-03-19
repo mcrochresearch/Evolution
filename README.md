@@ -128,25 +128,42 @@ Every 5 cycles, the **Metacognition Engine** activates — analyzing patterns ac
 
 Evolution requires a model that can reliably follow complex system prompts and use tools autonomously.
 
-| Tier | Models | Mode |
-|------|--------|------|
-| **Full Autonomous** | Claude Sonnet/Opus, GPT-4o, Gemini 2.5 Pro | Full loop — the model drives everything |
-| **Guided Mode** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash | `./engine/evolve next` — the engine drives, the model executes |
-| **Autopilot Mode** | Qwen 3.5 (35B-A3B MoE), Llama 8B, small local models | `--autopilot` — engine drives everything, model only writes code |
-| **Not Supported** | Models < 3B active params, heavily quantized models that can't follow any instructions | Even autopilot can't help if the model can't generate coherent code |
+| Tier | Models | Active Params | Mode |
+|------|--------|---------------|------|
+| **Full Autonomous** | Claude Sonnet/Opus, GPT-4o, Gemini 2.5 Pro | 70B+ | Full loop — the model drives everything |
+| **Guided Mode** | Claude Haiku, GPT-4o-mini, Gemini 2.0 Flash, Qwen 3.5 397B-A17B | 17B–70B | `./engine/evolve next` — engine drives, model executes |
+| **Autopilot Mode** | Qwen 3.5 35B-A3B, Llama 8B, small local models | 3B–17B | `--autopilot` — engine drives everything, model only writes code |
+| **Not Supported** | Models < 3B active params, heavily quantized models that can't follow any instructions | <3B | Even autopilot can't help if the model can't generate coherent code |
 
-**MoE models note:** Mixture-of-Experts models like Qwen 3.5 35B-A3B have large total parameter counts but only ~3B active parameters per forward pass. These cannot follow the autonomous loop or even guided mode — use **autopilot mode** instead.
+### MoE Models and Flash Offloading
 
-For models that can't drive the autonomous loop:
-- **Guided mode** (`./engine/evolve next`): Model still needs to parse JSON and call tools
-- **Autopilot mode** (`python3 engine/harness.py --autopilot`): Engine runs the entire loop, model only generates code snippets when asked
+Mixture-of-Experts (MoE) models have large total parameter counts but only activate a fraction per token:
+
+| Model | Total Params | Active Params | Experts (routed/total) | Tier |
+|-------|-------------|---------------|----------------------|------|
+| Qwen 3.5 397B-A17B | 397B | 17B | 10/512 per layer | Guided |
+| Qwen 3.5 35B-A3B | 35B | 3B | — | Autopilot |
+
+**Running large MoE models on limited RAM:** Using [flash-moe](https://github.com/danveloper/flash-moe) (inspired by Apple's [LLM in a Flash](https://arxiv.org/abs/2312.11514) paper), you can run the full 397B model on a 48GB Mac by streaming 2-bit expert weights from SSD:
+
+- ~5.5GB resident in RAM + SSD streaming (~120GB on disk)
+- ~5.5 tokens/sec on M3 Max 48GB
+- Expert routing reduced from K=10 to K=4 for memory budget
+- Slow but functional — Evolution's loop is patient
 
 ```bash
-# Autopilot with a small local model (Ollama, LM Studio, vLLM)
+# Guided mode with flash-offloaded Qwen 3.5 397B (17B active — smart enough for guided)
+python3 engine/harness.py --goal "Build X" \
+    --provider openai --model qwen3.5:397b \
+    --endpoint http://localhost:8080/v1
+
+# Autopilot with Qwen 3.5 35B-A3B (3B active — needs autopilot)
 python3 engine/harness.py --autopilot --goal "Build X" \
     --provider openai --model qwen3.5:35b-a3b \
     --endpoint http://localhost:11434/v1
 ```
+
+**Speed vs. quality tradeoff:** At 5.5 tok/s, a single Evolution cycle may take 2-5 minutes. For faster iteration, consider Qwen 3.5 122B-A10B (fits in 48GB at Q4, ~15 tok/s) or 35B-A3B in autopilot mode (~60 tok/s).
 
 ---
 

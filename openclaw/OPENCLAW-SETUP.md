@@ -66,7 +66,14 @@ Evolution requires a model capable of:
 
 **For smaller models:** Use **guided mode** (`./engine/evolve next`) — reduces autonomous decision-making.
 
-**For very small / MoE models** (Qwen 3.5 35B-A3B, Llama 8B, etc.): Use **autopilot mode** via the harness — the engine drives the entire loop and the model only generates code when asked:
+**For large MoE models via flash offloading** (Qwen 3.5 397B-A17B on limited RAM): 17B active params is enough for guided mode. Use [flash-moe](https://github.com/danveloper/flash-moe) to stream expert weights from SSD (~5.5 tok/s on M3 Max 48GB):
+```bash
+python3 engine/harness.py --goal "Build X" \
+    --provider openai --model qwen3.5:397b \
+    --endpoint http://localhost:8080/v1
+```
+
+**For very small / MoE models** (Qwen 3.5 35B-A3B with 3B active, Llama 8B, etc.): Use **autopilot mode** — engine drives everything, model only writes code:
 ```bash
 python3 engine/harness.py --autopilot --goal "Build X" \
     --provider openai --model your-model \

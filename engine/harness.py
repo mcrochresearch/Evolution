@@ -131,11 +131,19 @@ def get_soul_for_model(model_name: str) -> str:
     """Return appropriately-sized SOUL based on model capability."""
     model_lower = model_name.lower()
 
-    # Big models get the extended version
+    # Big models get the extended version (70B+ active params)
     big_models = ["opus", "gpt-4o", "gpt-4-turbo", "gpt-4", "claude-3-opus",
                   "claude-opus", "deepseek-v3", "llama-3.1-405b", "qwen-72b",
                   "qwen2.5-72b", "mistral-large"]
     for m in big_models:
+        if m in model_lower:
+            return EXTENDED_SOUL
+
+    # Large MoE models with 17B+ active params get extended version too
+    # These are smart enough for guided mode even at reduced expert counts
+    large_moe = ["qwen3.5-397b", "qwen3.5:397b", "397b-a17b", "qwen3-397b",
+                 "qwen3.5-122b", "qwen3.5:122b", "122b-a10b"]
+    for m in large_moe:
         if m in model_lower:
             return EXTENDED_SOUL
 
