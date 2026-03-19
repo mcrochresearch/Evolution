@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "goal": "Become the best SMB marketing agency in the world",
+  "created": "2026-03-19T01:53:36.349236+00:00",
+  "cycle": 1,
+  "phase": "GENESIS",
+  "fitness": 0.0,
+  "fitness_history": [
+    0.0
+  ],
+  "consecutive_failures": 1,
+  "consecutive_successes": 0,
+  "next_strategy_id": 4,
+  "_phase_pending": null,
+  "_phase_pending_count": 0,
+  "strategies": [
+    {
+      "id": "S001",
+      "name": "Outreach-Blitz",
+      "approach": "Maximize personalized cold outreach volume to SMBs with high pain scores",
+      "hypothesis": "Volume \u00d7 relevance = pipeline",
+      "fitness": 0.0,
+      "attempts": 1,
+      "successes": 0,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.597520+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE",
+      "context_stats": {
+        "low": {
+          "attempts": 1,
+          "successes": 0
+        }
+      }
+    },
+    {
+      "id": "S002",
+      "name": "Content-Authority",
+      "approach": "Build thought leadership content that attracts inbound leads",
+      "hypothesis": "Inbound > outbound at scale",
+      "fitness": 0.0,
+      "attempts": 0,
+      "successes": 0,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.645504+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE"
+    },
+    {
+      "id": "S003",
+      "name": "Referral-Engine",
+      "approach": "Turn every client into a referral machine with automated ask sequences",
+      "hypothesis": "Lowest CAC channel",
+      "fitness": 0.0,
+      "attempts": 0,
+      "successes": 0,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.685794+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE"
+    }
+  ],
+  "graveyard": [],
+  "hall_of_fame": [],
+  "cycles": [
+    {
+      "cycle": 1,
+      "strategy": "S001",
+      "action": "Outreach-Blitz selected. SearXNG 0 results \u2014 engines misconfigured. Checked pipeline state.",
+      "tests_passing": 0,
+      "tests_total": 1,
+      "fitness": 0.0,
+      "delta": 0.0,
+      "kept": false,
+      "timestamp": "2026-03-19T01:54:56.799505+00:00"
+    }
+  ],
+  "principles": [],
+  "episodes": [
+    {
+      "cycle": 1,
+      "action": "Outreach-Blitz selected. SearXNG 0 results \u2014 engines misconfigured. Checked pipeline state.",
+      "outcome": "REVERTED",
+      "fitness": 0.0,
+      "surprise": false,
+      "timestamp": "2026-03-19T01:54:56.799662+00:00"
+    }
+  ],
+  "sub_goals": [],
+  "success_criteria": [],
+  "cumulative_regret": 0.0,
+  "max_cycles": 200,
+  "_loop_step": "VERIFY",
+  "_last_selected": "S001"
+}
