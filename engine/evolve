@@ -345,6 +345,202 @@ case "$CMD" in
     dna-revert)
         python3 "$ENGINE_DIR/mutate_dna.py" revert
         ;;
+    gradient-mutate)
+        python3 "$ENGINE_DIR/mutate_dna.py" gradient-mutate
+        ;;
+    breed-express)
+        python3 "$ENGINE_DIR/mutate_dna.py" breed-express
+        ;;
+
+    # --- Language Gradients (Backward Attribution) ---
+    gradient-record)
+        python3 "$ENGINE_DIR/language_gradients.py" record "$@"
+        ;;
+    gradient-loss)
+        python3 "$ENGINE_DIR/language_gradients.py" loss "$@"
+        ;;
+    gradient-backward)
+        python3 "$ENGINE_DIR/language_gradients.py" backward "$@"
+        ;;
+    gradient-apply)
+        python3 "$ENGINE_DIR/language_gradients.py" apply
+        ;;
+    gradient-trajectory)
+        python3 "$ENGINE_DIR/language_gradients.py" trajectory
+        ;;
+    gradient-show)
+        python3 "$ENGINE_DIR/language_gradients.py" gradients
+        ;;
+    gradient-clear)
+        python3 "$ENGINE_DIR/language_gradients.py" clear
+        ;;
+    gradient-history)
+        python3 "$ENGINE_DIR/language_gradients.py" history
+        ;;
+
+    # --- Prompt Breeding (EvoPrompt) ---
+    breed-init)
+        python3 "$ENGINE_DIR/prompt_breeding.py" init "$@"
+        ;;
+    breed)
+        python3 "$ENGINE_DIR/prompt_breeding.py" breed "$@"
+        ;;
+    breed-score)
+        python3 "$ENGINE_DIR/prompt_breeding.py" score "$@"
+        ;;
+    breed-best)
+        python3 "$ENGINE_DIR/prompt_breeding.py" best "$@"
+        ;;
+    breed-population)
+        python3 "$ENGINE_DIR/prompt_breeding.py" population "$@"
+        ;;
+    breed-crossover)
+        python3 "$ENGINE_DIR/prompt_breeding.py" crossover "$@"
+        ;;
+    breed-mutate)
+        python3 "$ENGINE_DIR/prompt_breeding.py" mutate "$@"
+        ;;
+    breed-evolve-mutator)
+        python3 "$ENGINE_DIR/prompt_breeding.py" evolve-mutator
+        ;;
+    breed-status)
+        python3 "$ENGINE_DIR/prompt_breeding.py" status
+        ;;
+
+    # --- Meta Optimizer (Three-Optimizer Design) ---
+    meta-optimize-prompt)
+        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-prompt "$@"
+        ;;
+    meta-optimize-tools)
+        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-tools "$@"
+        ;;
+    meta-optimize-topology)
+        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-topology "$@"
+        ;;
+    meta-loop)
+        python3 "$ENGINE_DIR/meta_optimizer.py" meta-loop "$@"
+        ;;
+    meta-threshold)
+        python3 "$ENGINE_DIR/meta_optimizer.py" threshold-check "$@"
+        ;;
+    meta-status)
+        python3 "$ENGINE_DIR/meta_optimizer.py" status
+        ;;
+    meta-history)
+        python3 "$ENGINE_DIR/meta_optimizer.py" history
+        ;;
+
+    # --- Workflow Evolution (DAG Pipeline + AFlow + SEW) ---
+    workflow-init)
+        python3 "$ENGINE_DIR/workflow_evolution.py" init "$@"
+        ;;
+    workflow-add-node)
+        python3 "$ENGINE_DIR/workflow_evolution.py" add-node "$@"
+        ;;
+    workflow-remove-node)
+        python3 "$ENGINE_DIR/workflow_evolution.py" remove-node "$@"
+        ;;
+    workflow-add-edge)
+        python3 "$ENGINE_DIR/workflow_evolution.py" add-edge "$@"
+        ;;
+    workflow-remove-edge)
+        python3 "$ENGINE_DIR/workflow_evolution.py" remove-edge "$@"
+        ;;
+    workflow-score-node)
+        python3 "$ENGINE_DIR/workflow_evolution.py" score-node "$@"
+        ;;
+    workflow-optimize)
+        python3 "$ENGINE_DIR/workflow_evolution.py" optimize
+        ;;
+    workflow-aflow)
+        python3 "$ENGINE_DIR/workflow_evolution.py" aflow "$@"
+        ;;
+    workflow-topology)
+        python3 "$ENGINE_DIR/workflow_evolution.py" topology
+        ;;
+    workflow-validate)
+        python3 "$ENGINE_DIR/workflow_evolution.py" validate
+        ;;
+    workflow-order)
+        python3 "$ENGINE_DIR/workflow_evolution.py" execution-order
+        ;;
+    workflow-parallel)
+        python3 "$ENGINE_DIR/workflow_evolution.py" parallel-groups
+        ;;
+    workflow-history)
+        python3 "$ENGINE_DIR/workflow_evolution.py" history
+        ;;
+
+    # --- Multi Grader (N-Dimensional Scoring) ---
+    grade)
+        python3 "$ENGINE_DIR/multi_grader.py" grade "$@"
+        ;;
+    grade-add)
+        python3 "$ENGINE_DIR/multi_grader.py" add-grader "$@"
+        ;;
+    grade-remove)
+        python3 "$ENGINE_DIR/multi_grader.py" remove-grader "$@"
+        ;;
+    grade-list)
+        python3 "$ENGINE_DIR/multi_grader.py" list-graders
+        ;;
+    grade-aggregate)
+        python3 "$ENGINE_DIR/multi_grader.py" aggregate "$@"
+        ;;
+    grade-calibrate)
+        python3 "$ENGINE_DIR/multi_grader.py" calibrate "$@"
+        ;;
+    grade-history)
+        python3 "$ENGINE_DIR/multi_grader.py" history
+        ;;
+
+    # --- Error Signatures (Pattern Database) ---
+    error-extract)
+        python3 "$ENGINE_DIR/error_signatures.py" extract "$@"
+        ;;
+    error-match)
+        python3 "$ENGINE_DIR/error_signatures.py" match "$@"
+        ;;
+    error-resolve)
+        python3 "$ENGINE_DIR/error_signatures.py" resolve "$@"
+        ;;
+    error-list)
+        python3 "$ENGINE_DIR/error_signatures.py" list "$@"
+        ;;
+    error-stats)
+        python3 "$ENGINE_DIR/error_signatures.py" stats
+        ;;
+    error-prune)
+        python3 "$ENGINE_DIR/error_signatures.py" prune "$@"
+        ;;
+
+    # --- Closed Loop (Validation + Adversarial Critique) ---
+    validate)
+        python3 "$ENGINE_DIR/closed_loop.py" validate "$@"
+        ;;
+    critique)
+        python3 "$ENGINE_DIR/closed_loop.py" critique "$@"
+        ;;
+    heal)
+        python3 "$ENGINE_DIR/closed_loop.py" heal "$@"
+        ;;
+    pipeline-check)
+        python3 "$ENGINE_DIR/closed_loop.py" pipeline-check "$@"
+        ;;
+    loop-configure)
+        python3 "$ENGINE_DIR/closed_loop.py" configure "$@"
+        ;;
+    loop-status)
+        python3 "$ENGINE_DIR/closed_loop.py" status
+        ;;
+    loop-history)
+        python3 "$ENGINE_DIR/closed_loop.py" history
+        ;;
+
+    # --- Deploy Threshold ---
+    deploy-threshold)
+        python3 "$ENGINE_DIR/state.py" deploy-threshold "$@"
+        ;;
 
     # --- Harness (Outer Loop) ---
     harness)
@@ -379,6 +575,24 @@ case "$CMD" in
         echo "             outcome-retro | outcome-lessons"
         echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
         echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
+        echo "             gradient-mutate | breed-express"
+        echo "Gradients:   gradient-record | gradient-loss | gradient-backward | gradient-apply"
+        echo "             gradient-trajectory | gradient-show | gradient-clear | gradient-history"
+        echo "Breeding:    breed-init | breed | breed-score | breed-best | breed-population"
+        echo "             breed-crossover | breed-mutate | breed-evolve-mutator | breed-status"
+        echo "Meta-Opt:    meta-optimize-prompt | meta-optimize-tools | meta-optimize-topology"
+        echo "             meta-loop | meta-threshold | meta-status | meta-history"
+        echo "Workflow:    workflow-init | workflow-add-node | workflow-remove-node"
+        echo "             workflow-add-edge | workflow-remove-edge | workflow-score-node"
+        echo "             workflow-optimize | workflow-aflow | workflow-topology"
+        echo "             workflow-validate | workflow-order | workflow-parallel | workflow-history"
+        echo "Grading:     grade | grade-add | grade-remove | grade-list"
+        echo "             grade-aggregate | grade-calibrate | grade-history"
+        echo "Errors:      error-extract | error-match | error-resolve"
+        echo "             error-list | error-stats | error-prune"
+        echo "Closed-Loop: validate | critique | heal | pipeline-check"
+        echo "             loop-configure | loop-status | loop-history"
+        echo "Deploy:      deploy-threshold [value]"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
         ;;

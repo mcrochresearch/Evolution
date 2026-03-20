@@ -11,6 +11,8 @@ This module:
 4. Tracks mutation history with fitness impact
 5. Auto-reverts mutations that hurt fitness within 5 cycles
 6. Expresses DNA as a system prompt fragment for injection
+7. Integrates with language_gradients.py for backward-attributed mutation targeting
+8. Integrates with prompt_breeding.py for evolutionary prompt population
 
 Usage:
     python3 engine/mutate_dna.py mutate           # Mutate one parameter
@@ -18,6 +20,8 @@ Usage:
     python3 engine/mutate_dna.py fitness           # Score current DNA vs recent cycles
     python3 engine/mutate_dna.py status            # Show current DNA + mutation history
     python3 engine/mutate_dna.py revert            # Revert last mutation
+    python3 engine/mutate_dna.py gradient-mutate   # Mutate based on language gradient blame
+    python3 engine/mutate_dna.py breed-express     # Express best prompt from breeding population
 """
 
 import json
@@ -631,10 +635,156 @@ def cmd_revert():
     print(json.dumps({"status": "reverted", "param": param, "reverted_to": old_val}))
 
 
+def cmd_gradient_mutate():
+    """Mutate DNA parameter targeted by language gradient blame attribution.
+
+    Instead of random mutation, use the language gradients system to identify
+    WHICH parameter is most responsible for poor performance, and mutate that one.
+    This is more surgical than random mutation.
+
+    Falls back to random mutation if no gradient data is available.
+    """
+    gradient_state_file = STATE_DIR / "gradients.json"
+    if not gradient_state_file.exists():
+        # No gradient data — fall back to regular mutation
+        cmd_mutate()
+        return
+
+    with open(gradient_state_file) as f:
+        gradient_state = json.load(f)
+
+    gradients = gradient_state.get("gradients", [])
+    if not gradients:
+        cmd_mutate()
+        return
+
+    # Find the highest-blame gradient
+    top_gradient = max(gradients, key=lambda g: g.get("blame_score", 0))
+    blame = top_gradient.get("blame_score", 0)
+    attribution = top_gradient.get("attribution", "")
+
+    # Map attribution signals to DNA parameters
+    param_to_mutate = None
+
+    if "error" in attribution.lower() or "failed" in attribution.lower():
+        param_to_mutate = "verification_rigor"  # Increase testing
+    elif "empty" in attribution.lower() or "minimal" in attribution.lower():
+        param_to_mutate = "detail_orientation"  # Increase detail
+    elif "alignment" in attribution.lower() or "ignored" in attribution.lower():
+        param_to_mutate = "planning_depth"  # Better planning
+    elif "pass-through" in attribution.lower():
+        param_to_mutate = "exploration_rate"  # Try different approaches
+    elif blame >= 0.5:
+        param_to_mutate = "risk_tolerance"  # High blame = need bolder moves
+
+    if param_to_mutate is None:
+        # No clear mapping — fall back to random
+        cmd_mutate()
+        return
+
+    # Perform targeted mutation
+    state = load_state()
+
+    if state.get("pending_mutation"):
+        remaining = 5 - (get_current_cycle() - state.get("pending_since_cycle", 0))
+        if remaining > 0:
+            result = {"status": "evaluating", "param": state["pending_mutation"]["param"],
+                      "cycles_remaining": remaining, "source": "gradient_targeted"}
+            print(json.dumps(result, indent=2))
+            return
+
+    dna = state["current_dna"]
+    param_name, old_value, new_value = mutate_parameter(dna, param_to_mutate)
+
+    dna[param_name] = new_value
+    state["current_dna"] = dna
+
+    current_cycle = get_current_cycle()
+    recent = get_recent_fitness(5)
+    current_fitness = recent[-1] if recent else 0.0
+
+    mutation_record = {
+        "generation": state["generation"],
+        "cycle": current_cycle,
+        "param": param_name,
+        "old": old_value if not isinstance(old_value, float) else round(old_value, 2),
+        "new": new_value if not isinstance(new_value, float) else round(new_value, 2),
+        "fitness_impact": "—",
+        "kept": True,
+        "source": "gradient_targeted",
+        "blame_score": round(blame, 2),
+        "attribution": attribution[:200],
+        "timestamp": datetime.now().isoformat(),
+    }
+    state["mutations"].append(mutation_record)
+    state["pending_mutation"] = mutation_record
+    state["pending_since_cycle"] = current_cycle
+    state["fitness_at_mutation"] = current_fitness
+
+    save_state(state)
+    write_dna_to_markdown(dna, state["generation"], state["mutations"])
+
+    result = {
+        "status": "gradient_mutated",
+        "generation": state["generation"],
+        "param": param_name,
+        "old": old_value,
+        "new": new_value,
+        "source": "gradient_targeted",
+        "blame_score": round(blame, 2),
+        "attribution_summary": attribution[:200],
+        "evaluating_for": "5 cycles",
+    }
+    print(json.dumps(result, indent=2))
+
+
+def cmd_breed_express():
+    """Express the best prompt from the breeding population.
+
+    Integrates with prompt_breeding.py to get the best-performing evolved
+    prompt for the 'soul' role, then combines it with DNA expression.
+    """
+    breeding_state_file = STATE_DIR / "prompt_breeding.json"
+
+    # Get standard DNA expression
+    state = load_state()
+    dna = state["current_dna"]
+    dna_fragment = express_dna(dna)
+
+    # Try to get bred prompt
+    bred_fragment = None
+    if breeding_state_file.exists():
+        with open(breeding_state_file) as f:
+            breeding = json.load(f)
+
+        for role_name in ("soul", "system", "reasoning"):
+            if role_name in breeding.get("roles", {}):
+                role_data = breeding["roles"][role_name]
+                active = [p for p in role_data["prompts"] if p.get("active")]
+                if active:
+                    best = max(active, key=lambda p: p.get("avg_fitness", 0))
+                    if best.get("evaluations", 0) >= 2 and best.get("avg_fitness", 0) > 0.3:
+                        bred_fragment = best["text"]
+                        break
+
+    output = {
+        "generation": state["generation"],
+        "dna": dna,
+        "dna_fragment": dna_fragment,
+        "bred_prompt": bred_fragment,
+        "combined_fragment": (
+            f"{dna_fragment}\n\n--- Evolved Prompt (from breeding population) ---\n{bred_fragment}"
+            if bred_fragment else dna_fragment
+        ),
+        "source": "dna+breeding" if bred_fragment else "dna_only",
+    }
+    print(json.dumps(output, indent=2))
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python3 engine/mutate_dna.py <command>")
-        print("Commands: mutate, express, fitness, status, revert")
+        print("Commands: mutate, express, fitness, status, revert, gradient-mutate, breed-express")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -649,6 +799,10 @@ def main():
         cmd_status()
     elif cmd == "revert":
         cmd_revert()
+    elif cmd == "gradient-mutate":
+        cmd_gradient_mutate()
+    elif cmd == "breed-express":
+        cmd_breed_express()
     else:
         print(f'{{"error": "Unknown command: {cmd}"}}')
         sys.exit(1)

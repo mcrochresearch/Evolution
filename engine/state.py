@@ -125,6 +125,8 @@ def default_state(goal: str) -> dict:
         "success_criteria": [],
         "cumulative_regret": 0.0,
         "max_cycles": MAX_CYCLES_DEFAULT,
+        "deploy_threshold": 0.80,
+        "pipeline_dag": None,
     }
 
 
@@ -1391,6 +1393,18 @@ def main():
         elif cmd == "fitness":
             state = load_state()
             print(json.dumps({"fitness": state["fitness"], "history": state["fitness_history"][-20:]}))
+        elif cmd == "deploy-threshold":
+            if len(sys.argv) < 3:
+                state = load_state()
+                print(json.dumps({"deploy_threshold": state.get("deploy_threshold", 0.80)}))
+            else:
+                threshold = safe_float(sys.argv[2], "threshold")
+                if not (0.0 <= threshold <= 1.0):
+                    print(json.dumps({"error": "Threshold must be between 0.0 and 1.0"}))
+                    sys.exit(1)
+                with locked_state() as state:
+                    state["deploy_threshold"] = threshold
+                print(json.dumps({"status": "threshold_set", "deploy_threshold": threshold}))
         elif cmd == "reset":
             cmd_reset(force="--force" in sys.argv)
         elif cmd == "export":
