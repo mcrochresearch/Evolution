@@ -28,10 +28,10 @@ Usage:
 """
 
 import json
-import math
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -99,13 +99,31 @@ def load_grader_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_grader_state(state: dict):
-    """Save grader state."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    """Save grader state (atomic write)."""
     if len(state.get("grading_history", [])) > MAX_HISTORY:
         state["grading_history"] = state["grading_history"][-MAX_HISTORY:]
-    with open(GRADER_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    # Trim calibration data per grader to prevent unbounded growth
+    for grader_name, cal_data in state.get("calibration_data", {}).items():
+        if len(cal_data) > 50:
+            state["calibration_data"][grader_name] = cal_data[-50:]
+    _atomic_write(GRADER_STATE, state)
 
 
 # ---------------------------------------------------------------------------

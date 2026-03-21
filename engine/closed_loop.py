@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -69,7 +70,7 @@ CRITIQUE_PERSPECTIVES = {
 # State Management
 # ---------------------------------------------------------------------------
 
-def load_state() -> dict:
+def load_closed_loop_state() -> dict:
     """Load closed loop state."""
     if CLOSED_LOOP_STATE.exists():
         with open(CLOSED_LOOP_STATE) as f:
@@ -85,14 +86,28 @@ def load_state() -> dict:
     }
 
 
-def save_state(state: dict):
-    """Save closed loop state."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def save_closed_loop_state(state: dict):
+    """Save closed loop state (atomic write)."""
     for key in ("validation_history", "critique_history", "healing_history"):
         if key in state and len(state[key]) > MAX_HISTORY:
             state[key] = state[key][-MAX_HISTORY:]
-    with open(CLOSED_LOOP_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    _atomic_write(CLOSED_LOOP_STATE, state)
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +124,7 @@ def cmd_validate(stage_id: str, output: str, criteria_json: str):
 
     Returns pass/fail per criterion plus overall validation result.
     """
-    state = load_state()
+    state = load_closed_loop_state()
 
     try:
         criteria = json.loads(criteria_json)
@@ -146,7 +161,7 @@ def cmd_validate(stage_id: str, output: str, criteria_json: str):
     }
     state["validation_history"].append(record)
     state["total_validations"] += 1
-    save_state(state)
+    save_closed_loop_state(state)
 
     print(json.dumps({
         "status": "passed" if all_passed else "failed",
@@ -232,7 +247,7 @@ def cmd_critique(output: str, task_description: str, perspective: str = None):
     would be a separate LLM call with a different system prompt.
     Here we use heuristic analysis.
     """
-    state = load_state()
+    state = load_closed_loop_state()
 
     if perspective and perspective in CRITIQUE_PERSPECTIVES:
         perspectives = {perspective: CRITIQUE_PERSPECTIVES[perspective]}
@@ -265,7 +280,7 @@ def cmd_critique(output: str, task_description: str, perspective: str = None):
     }
     state["critique_history"].append(record)
     state["total_critiques"] += 1
-    save_state(state)
+    save_closed_loop_state(state)
 
     print(json.dumps({
         "status": "critique_complete",
@@ -388,7 +403,7 @@ def cmd_heal(stage_id: str, output: str, validation_result_json: str):
     Takes the failed validation result and produces specific instructions
     for how to fix the output. This is the "healing" part of the closed loop.
     """
-    state = load_state()
+    state = load_closed_loop_state()
 
     try:
         validation = json.loads(validation_result_json)
@@ -448,7 +463,7 @@ def cmd_heal(stage_id: str, output: str, validation_result_json: str):
     }
     state["healing_history"].append(record)
     state["total_heals"] += 1
-    save_state(state)
+    save_closed_loop_state(state)
 
     print(json.dumps({
         "status": "healing_instructions_generated",
@@ -506,7 +521,7 @@ def cmd_pipeline_check(pipeline_results_json: str):
 
 def cmd_configure(stage_id: str, max_retries: int, criteria_json: str):
     """Configure validation criteria for a pipeline stage."""
-    state = load_state()
+    state = load_closed_loop_state()
 
     try:
         criteria = json.loads(criteria_json)
@@ -518,7 +533,7 @@ def cmd_configure(stage_id: str, max_retries: int, criteria_json: str):
         "criteria": criteria,
         "configured_at": now(),
     }
-    save_state(state)
+    save_closed_loop_state(state)
 
     print(json.dumps({
         "status": "configured",
@@ -534,7 +549,7 @@ def cmd_configure(stage_id: str, max_retries: int, criteria_json: str):
 
 def cmd_status():
     """Show closed loop status."""
-    state = load_state()
+    state = load_closed_loop_state()
 
     print(json.dumps({
         "total_validations": state["total_validations"],
@@ -556,7 +571,7 @@ def _compute_pass_rate(history: list) -> float:
 
 def cmd_history():
     """Show validation, critique, and healing history."""
-    state = load_state()
+    state = load_closed_loop_state()
     print(json.dumps({
         "validation_history": state["validation_history"][-10:],
         "critique_history": state["critique_history"][-10:],

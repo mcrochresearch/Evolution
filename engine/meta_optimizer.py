@@ -30,6 +30,7 @@ Usage:
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -67,16 +68,30 @@ def load_meta_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_meta_state(state: dict):
-    """Save meta optimizer state."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    """Save meta optimizer state (atomic write)."""
     # Trim history
     for key in ("prompt_optimizations", "tool_optimizations",
                 "topology_optimizations", "meta_loop_runs"):
         if key in state and len(state[key]) > MAX_HISTORY:
             state[key] = state[key][-MAX_HISTORY:]
-    with open(META_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    _atomic_write(META_STATE, state)
 
 
 # ---------------------------------------------------------------------------

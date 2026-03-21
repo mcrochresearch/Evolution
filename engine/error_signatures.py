@@ -29,14 +29,15 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 try:
-    from engine.stats import now, wilson_lower
+    from engine.stats import now
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from stats import now, wilson_lower
+    from stats import now
 
 ENGINE_DIR = Path(__file__).parent
 PROJECT_DIR = ENGINE_DIR.parent
@@ -121,16 +122,30 @@ def load_signatures() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_signatures(state: dict):
-    """Save error signature database."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    """Save error signature database (atomic write)."""
     # Prune if over limit (keep most recently seen)
     sigs = state["signatures"]
     if len(sigs) > MAX_SIGNATURES:
         sorted_sigs = sorted(sigs.items(), key=lambda x: x[1].get("last_seen", ""), reverse=True)
         state["signatures"] = dict(sorted_sigs[:MAX_SIGNATURES])
-    with open(SIGNATURES_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    _atomic_write(SIGNATURES_FILE, state)
 
 
 # ---------------------------------------------------------------------------

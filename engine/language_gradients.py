@@ -28,7 +28,7 @@ Usage:
 import json
 import os
 import sys
-from datetime import datetime, timezone
+import tempfile
 from pathlib import Path
 
 try:
@@ -62,11 +62,25 @@ def load_gradient_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_gradient_state(state: dict):
-    """Save gradient state to JSON."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(GRADIENT_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    """Save gradient state to JSON (atomic write)."""
+    _atomic_write(GRADIENT_STATE, state)
 
 
 def load_gradient_history() -> list:
@@ -79,11 +93,9 @@ def load_gradient_history() -> list:
 
 def save_gradient_history(history: list):
     """Save gradient history, trimming to MAX_HISTORY."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
     if len(history) > MAX_HISTORY:
         history = history[-MAX_HISTORY:]
-    with open(GRADIENT_HISTORY, "w") as f:
-        json.dump(history, f, indent=2)
+    _atomic_write(GRADIENT_HISTORY, history)
 
 
 # ---------------------------------------------------------------------------
@@ -298,39 +310,56 @@ def cmd_backward(loss_description: str = ""):
     }))
 
 
+def _classify_node_output(node: dict) -> dict:
+    """Classify node output for error/empty/alignment patterns.
+
+    Returns a dict with boolean flags reused by attribution, fix suggestion,
+    and blame score computation.
+    """
+    output = node["output"]
+    output_lower = output.lower()
+    error_keywords = ["error", "failed", "exception", "traceback"]
+    has_errors = any(kw in output_lower for kw in error_keywords)
+    is_empty = len(output.strip()) < 10
+    prompt_words = set(node["prompt"].lower().split())
+    output_words = set(output_lower.split())
+    if prompt_words and output_words:
+        alignment = len(prompt_words & output_words) / max(len(prompt_words), 1)
+    else:
+        alignment = 0.0
+    return {
+        "has_errors": has_errors,
+        "is_empty": is_empty,
+        "alignment": alignment,
+        "short_prompt": len(node["prompt"]) < 50,
+    }
+
+
 def _compute_attribution(node: dict, downstream_loss: str) -> str:
     """Compute what this specific node contributed to the downstream loss.
 
     This is the "language gradient" — a textual description of this node's
     contribution to the error.
     """
-    node_output = node["output"].lower()
+    cls = _classify_node_output(node)
     loss_lower = downstream_loss.lower()
 
     attributions = []
 
-    # Check if node output contains error patterns
-    if any(kw in node_output for kw in ["error", "failed", "exception", "traceback"]):
+    if cls["has_errors"]:
         attributions.append("Node produced error output that propagated downstream")
 
-    # Check if node output is empty/minimal
-    if len(node["output"].strip()) < 10:
+    if cls["is_empty"]:
         attributions.append("Node produced minimal/empty output, starving downstream nodes of input")
 
-    # Check if loss mentions this node's output
     if node["node_id"].lower() in loss_lower:
         attributions.append(f"Loss specifically references this node ({node['node_id']})")
 
-    # Check for prompt-output misalignment
-    prompt_words = set(node["prompt"].lower().split())
-    output_words = set(node_output.split())
-    if prompt_words and output_words:
-        overlap = len(prompt_words & output_words) / max(len(prompt_words), 1)
-        if overlap < 0.1:
-            attributions.append(
-                f"Low prompt-output alignment ({overlap:.0%}): "
-                f"prompt may be poorly specified or model ignored instructions"
-            )
+    if cls["alignment"] < 0.1:
+        attributions.append(
+            f"Low prompt-output alignment ({cls['alignment']:.0%}): "
+            f"prompt may be poorly specified or model ignored instructions"
+        )
 
     if not attributions:
         attributions.append("No direct attribution detected — node may be a neutral pass-through")
@@ -340,23 +369,21 @@ def _compute_attribution(node: dict, downstream_loss: str) -> str:
 
 def _suggest_fix(node: dict, downstream_loss: str) -> str:
     """Suggest concrete changes to this node's prompt/configuration."""
+    cls = _classify_node_output(node)
     suggestions = []
 
-    output = node["output"].lower()
-    prompt = node["prompt"]
-
     # Error in output → add error handling to prompt
-    if any(kw in output for kw in ["error", "failed", "exception"]):
+    if cls["has_errors"]:
         suggestions.append("Add explicit error handling instructions to prompt")
         suggestions.append("Add 'If you encounter an error, describe it and attempt recovery' to prompt")
 
     # Empty output → strengthen output requirements
-    if len(node["output"].strip()) < 10:
+    if cls["is_empty"]:
         suggestions.append("Add minimum output length requirement to prompt")
         suggestions.append("Add 'You MUST produce a non-empty result' to prompt")
 
     # Short prompt → may lack specificity
-    if len(prompt) < 50:
+    if cls["short_prompt"]:
         suggestions.append("Prompt is very short — add more specific instructions about expected format and content")
 
     # Generic suggestion based on loss
@@ -374,24 +401,20 @@ def _compute_blame_score(node: dict, downstream_loss: str) -> float:
 
     Higher = more responsible for the downstream loss.
     """
+    cls = _classify_node_output(node)
     score = 0.0
 
-    output = node["output"].lower()
-
-    # Error output = high blame
-    if any(kw in output for kw in ["error", "failed", "exception", "traceback"]):
+    if cls["has_errors"]:
         score += 0.4
 
-    # Empty output = high blame
-    if len(node["output"].strip()) < 10:
+    if cls["is_empty"]:
         score += 0.3
 
     # Loss mentions this node
     if node["node_id"].lower() in downstream_loss.lower():
         score += 0.2
 
-    # Prompt too vague
-    if len(node["prompt"]) < 50:
+    if cls["short_prompt"]:
         score += 0.1
 
     return min(1.0, round(score, 2))

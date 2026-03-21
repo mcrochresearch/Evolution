@@ -32,13 +32,14 @@ Usage:
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 try:
-    from engine.stats import now, wilson_lower
+    from engine.stats import now
 except ImportError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from stats import now, wilson_lower
+    from stats import now
 
 ENGINE_DIR = Path(__file__).parent
 PROJECT_DIR = ENGINE_DIR.parent
@@ -67,14 +68,28 @@ def load_workflow_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_workflow_state(state: dict):
-    """Save workflow state."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    """Save workflow state (atomic write)."""
     for key in ("optimization_history", "aflow_explorations"):
         if key in state and len(state[key]) > MAX_HISTORY:
             state[key] = state[key][-MAX_HISTORY:]
-    with open(WORKFLOW_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    _atomic_write(WORKFLOW_STATE, state)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +216,7 @@ def cmd_remove_edge(from_id: str, to_id: str):
 
 def cmd_score_node(node_id: str, fitness: float):
     """Record a fitness observation for a node."""
+    fitness = max(0.0, min(1.0, fitness))
     state = load_workflow_state()
 
     if node_id not in state["nodes"]:
@@ -250,6 +266,7 @@ def _has_cycle(nodes: dict, edges: list) -> bool:
 
 def _topological_sort(nodes: dict, edges: list) -> list:
     """Kahn's algorithm for topological sort."""
+    import heapq
     in_degree = {nid: 0 for nid in nodes}
     adjacency = {nid: [] for nid in nodes}
 
@@ -258,17 +275,18 @@ def _topological_sort(nodes: dict, edges: list) -> list:
             in_degree[e["to"]] += 1
             adjacency[e["from"]].append(e["to"])
 
-    queue = [nid for nid in nodes if in_degree[nid] == 0]
+    # Use a min-heap for O(n log n) deterministic ordering instead of O(n^2)
+    heap = sorted(nid for nid in nodes if in_degree[nid] == 0)
+    heapq.heapify(heap)
     order = []
 
-    while queue:
-        queue.sort()  # Deterministic ordering
-        node = queue.pop(0)
+    while heap:
+        node = heapq.heappop(heap)
         order.append(node)
         for neighbor in adjacency[node]:
             in_degree[neighbor] -= 1
             if in_degree[neighbor] == 0:
-                queue.append(neighbor)
+                heapq.heappush(heap, neighbor)
 
     return order
 
@@ -303,17 +321,24 @@ def cmd_topology():
     """Show current DAG topology."""
     state = load_workflow_state()
 
+    # Build adjacency dicts once instead of O(n*edges)
+    deps_map = {nid: [] for nid in state["nodes"]}
+    fwd_map = {nid: [] for nid in state["nodes"]}
+    for e in state["edges"]:
+        if e["to"] in deps_map:
+            deps_map[e["to"]].append(e["from"])
+        if e["from"] in fwd_map:
+            fwd_map[e["from"]].append(e["to"])
+
     nodes_info = {}
     for nid, node in state["nodes"].items():
-        deps = [e["from"] for e in state["edges"] if e["to"] == nid]
-        dependents = [e["to"] for e in state["edges"] if e["from"] == nid]
         nodes_info[nid] = {
             "role": node["role"],
             "prompt_preview": node["prompt"][:100],
             "avg_fitness": node["avg_fitness"],
             "evaluations": node["evaluations"],
-            "depends_on": deps,
-            "feeds_into": dependents,
+            "depends_on": deps_map.get(nid, []),
+            "feeds_into": fwd_map.get(nid, []),
             "active": node["active"],
         }
 

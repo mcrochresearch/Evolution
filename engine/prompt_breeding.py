@@ -29,10 +29,10 @@ Usage:
 """
 
 import json
-import math
 import os
 import random
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -90,11 +90,31 @@ def load_breeding_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_breeding_state(state: dict):
-    """Save breeding state to JSON."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(BREEDING_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    """Save breeding state to JSON (atomic write)."""
+    # Trim inactive prompts per role to prevent unbounded growth
+    for role_data in state.get("roles", {}).values():
+        inactive = [p for p in role_data["prompts"] if not p.get("active", True)]
+        if len(inactive) > 20:
+            inactive_ids = {p["id"] for p in sorted(inactive, key=lambda p: p.get("created", ""))[:len(inactive) - 20]}
+            role_data["prompts"] = [p for p in role_data["prompts"] if p.get("active", True) or p["id"] not in inactive_ids]
+    _atomic_write(BREEDING_STATE, state)
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +160,7 @@ def cmd_init(role: str, seed_prompt: str):
 
 def cmd_score(role: str, prompt_id: str, fitness: float):
     """Record a fitness observation for a prompt."""
+    fitness = max(0.0, min(1.0, fitness))
     state = load_breeding_state()
 
     if role not in state["roles"]:
@@ -251,26 +272,9 @@ def cmd_crossover(role: str, id1: str, id2: str):
         print(json.dumps({"error": f"Prompt '{missing}' not found"}))
         sys.exit(1)
 
-    # Structural crossover: split into sentences, interleave
-    sentences1 = _split_sentences(parent1["text"])
-    sentences2 = _split_sentences(parent2["text"])
-
-    # Take ~60% from the fitter parent, ~40% from the other
-    if parent1["avg_fitness"] >= parent2["avg_fitness"]:
-        primary, secondary = sentences1, sentences2
-    else:
-        primary, secondary = sentences2, sentences1
-
-    child_sentences = []
-    for i in range(max(len(primary), len(secondary))):
-        if i < len(primary) and random.random() < 0.6:
-            child_sentences.append(primary[i])
-        elif i < len(secondary):
-            child_sentences.append(secondary[i])
-        elif i < len(primary):
-            child_sentences.append(primary[i])
-
-    child_text = " ".join(child_sentences)
+    # Structural crossover using shared helper
+    child_text = _do_crossover(parent1["text"], parent2["text"],
+                               parent1["avg_fitness"], parent2["avg_fitness"])
 
     prompt_id = f"P{role_data['next_id']:03d}"
     role_data["next_id"] += 1
@@ -359,6 +363,31 @@ def cmd_mutate(role: str, prompt_id: str):
     }))
 
 
+def _do_crossover(text1: str, text2: str, fitness1: float, fitness2: float) -> str:
+    """Perform structural crossover between two prompt texts.
+
+    Takes ~60% from the fitter parent, ~40% from the other.
+    """
+    sentences1 = _split_sentences(text1)
+    sentences2 = _split_sentences(text2)
+
+    if fitness1 >= fitness2:
+        primary, secondary = sentences1, sentences2
+    else:
+        primary, secondary = sentences2, sentences1
+
+    child_sentences = []
+    for i in range(max(len(primary), len(secondary))):
+        if i < len(primary) and random.random() < 0.6:
+            child_sentences.append(primary[i])
+        elif i < len(secondary):
+            child_sentences.append(secondary[i])
+        elif i < len(primary):
+            child_sentences.append(primary[i])
+
+    return " ".join(child_sentences)
+
+
 def _apply_mutation(text: str) -> tuple:
     """Apply a random mutation operator to prompt text. Returns (type, new_text)."""
     sentences = _split_sentences(text)
@@ -445,25 +474,9 @@ def cmd_breed(role: str):
 
     # Decide: crossover (70%) or mutation (30%)
     if random.random() < 0.7 and len(parents) == 2:
-        # Crossover
-        sentences1 = _split_sentences(parents[0]["text"])
-        sentences2 = _split_sentences(parents[1]["text"])
-
-        if parents[0]["avg_fitness"] >= parents[1]["avg_fitness"]:
-            primary, secondary = sentences1, sentences2
-        else:
-            primary, secondary = sentences2, sentences1
-
-        child_sentences = []
-        for i in range(max(len(primary), len(secondary))):
-            if i < len(primary) and random.random() < 0.6:
-                child_sentences.append(primary[i])
-            elif i < len(secondary):
-                child_sentences.append(secondary[i])
-            elif i < len(primary):
-                child_sentences.append(primary[i])
-
-        child_text = " ".join(child_sentences)
+        # Crossover using shared helper
+        child_text = _do_crossover(parents[0]["text"], parents[1]["text"],
+                                   parents[0]["avg_fitness"], parents[1]["avg_fitness"])
         origin = "crossover"
         parent_ids = [parents[0]["id"], parents[1]["id"]]
     else:

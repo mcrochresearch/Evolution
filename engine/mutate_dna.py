@@ -29,8 +29,14 @@ import os
 import random
 import re
 import sys
-from datetime import datetime
+import tempfile
 from pathlib import Path
+
+try:
+    from engine.stats import now as _now
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from stats import now as _now
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -112,11 +118,28 @@ def load_state() -> dict:
     }
 
 
+def _atomic_write(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_state(state: dict):
-    """Save DNA state to JSON."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(DNA_STATE, "w") as f:
-        json.dump(state, f, indent=2)
+    """Save DNA state to JSON (atomic write)."""
+    # Trim mutations list to prevent unbounded growth
+    if len(state.get("mutations", [])) > 100:
+        state["mutations"] = state["mutations"][-100:]
+    _atomic_write(DNA_STATE, state)
 
 
 def parse_dna_from_markdown() -> dict:
@@ -521,7 +544,7 @@ def cmd_mutate():
         "new": new_value if not isinstance(new_value, float) else round(new_value, 2),
         "fitness_impact": "—",
         "kept": True,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now(),
     }
     state["mutations"].append(mutation_record)
     state["pending_mutation"] = mutation_record
@@ -714,7 +737,7 @@ def cmd_gradient_mutate():
         "source": "gradient_targeted",
         "blame_score": round(blame, 2),
         "attribution": attribution[:200],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": _now(),
     }
     state["mutations"].append(mutation_record)
     state["pending_mutation"] = mutation_record
