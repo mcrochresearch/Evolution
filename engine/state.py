@@ -103,7 +103,7 @@ MAX_HISTORY = 500                   # Rolling window for fitness_history, cycles
 def default_state(goal: str) -> dict:
     """Create a fresh evolution state."""
     return {
-        "version": 3,
+        "version": 4,
         "goal": goal,
         "created": now(),
         "cycle": 0,
@@ -127,6 +127,16 @@ def default_state(goal: str) -> dict:
         "max_cycles": MAX_CYCLES_DEFAULT,
         "deploy_threshold": 0.80,
         "pipeline_dag": None,
+        "trading": {
+            "enabled": False,
+            "bankroll": 0.0,
+            "peak_bankroll": 0.0,
+            "total_pnl": 0.0,
+            "total_trades": 0,
+            "winning_trades": 0,
+            "open_positions": [],
+            "trade_log": [],
+        },
     }
 
 
@@ -149,7 +159,7 @@ def _release_lock(lock_fd):
     lock_fd.close()
 
 
-CURRENT_STATE_VERSION = 3
+CURRENT_STATE_VERSION = 4
 
 
 def _migrate_state(state: dict) -> dict:
@@ -184,6 +194,21 @@ def _migrate_state(state: dict) -> dict:
                     s["parents"] = [old]
         state["version"] = 3
         version = 3
+
+    if version < 4:
+        # v4: Trading infrastructure fields
+        state.setdefault("trading", {
+            "enabled": False,
+            "bankroll": 0.0,
+            "peak_bankroll": 0.0,
+            "total_pnl": 0.0,
+            "total_trades": 0,
+            "winning_trades": 0,
+            "open_positions": [],
+            "trade_log": [],
+        })
+        state["version"] = 4
+        version = 4
 
     return state
 
@@ -1244,6 +1269,37 @@ def cmd_status():
         "cumulative_regret": round(state.get("cumulative_regret", 0.0), 4),
         "avg_regret_per_cycle": round(state.get("cumulative_regret", 0.0) / max(total_cycles, 1), 4),
     }
+
+    # Include trading dashboard when trading is enabled
+    trading = state.get("trading", {})
+    if trading.get("enabled"):
+        bankroll = trading.get("bankroll", 0)
+        peak = trading.get("peak_bankroll", 0)
+        total_trades = trading.get("total_trades", 0)
+        winning = trading.get("winning_trades", 0)
+        drawdown_pct = round((peak - bankroll) / peak * 100, 2) if peak > 0 else 0
+
+        dashboard["trading"] = {
+            "bankroll": round(bankroll, 2),
+            "peak_bankroll": round(peak, 2),
+            "total_pnl": round(trading.get("total_pnl", 0), 2),
+            "drawdown_pct": drawdown_pct,
+            "total_trades": total_trades,
+            "win_rate": round(winning / total_trades, 3) if total_trades > 0 else 0,
+            "open_positions": len(trading.get("open_positions", [])),
+        }
+
+        # Import risk dashboard if available
+        try:
+            from engine.risk import get_risk_dashboard
+            risk_dash = get_risk_dashboard(bankroll, trading.get("open_positions", []))
+            dashboard["trading"]["halted"] = risk_dash.get("halted", False)
+            dashboard["trading"]["halt_reason"] = risk_dash.get("halt_reason")
+            dashboard["trading"]["daily_pnl"] = risk_dash.get("daily_pnl", 0)
+            dashboard["trading"]["can_trade"] = risk_dash.get("can_trade", True)
+        except ImportError:
+            pass
+
     print(json.dumps(dashboard, indent=2))
 
 
@@ -1405,6 +1461,54 @@ def main():
                 with locked_state() as state:
                     state["deploy_threshold"] = threshold
                 print(json.dumps({"status": "threshold_set", "deploy_threshold": threshold}))
+        elif cmd == "trading-init":
+            # Initialize trading mode with a bankroll
+            if len(sys.argv) < 3:
+                print(json.dumps({"error": "Usage: trading-init <bankroll_usd>"}))
+                sys.exit(1)
+            bankroll = safe_float(sys.argv[2], "bankroll")
+            with locked_state() as state:
+                state.setdefault("trading", {})
+                state["trading"]["enabled"] = True
+                state["trading"]["bankroll"] = bankroll
+                state["trading"]["peak_bankroll"] = max(bankroll, state["trading"].get("peak_bankroll", 0))
+            print(json.dumps({"status": "trading_enabled", "bankroll": bankroll}))
+        elif cmd == "trading-record":
+            # Record a trade result: trading-record <win|loss> <pnl_usd> [market_id]
+            if len(sys.argv) < 4:
+                print(json.dumps({"error": "Usage: trading-record <win|loss> <pnl_usd> [market_id]"}))
+                sys.exit(1)
+            win = sys.argv[2].lower() == "win"
+            pnl = safe_float(sys.argv[3], "pnl")
+            market_id = sys.argv[4] if len(sys.argv) > 4 else ""
+            with locked_state() as state:
+                trading = state.setdefault("trading", {})
+                trading["total_trades"] = trading.get("total_trades", 0) + 1
+                trading["total_pnl"] = round(trading.get("total_pnl", 0) + pnl, 2)
+                trading["bankroll"] = round(trading.get("bankroll", 0) + pnl, 2)
+                if win:
+                    trading["winning_trades"] = trading.get("winning_trades", 0) + 1
+                if trading["bankroll"] > trading.get("peak_bankroll", 0):
+                    trading["peak_bankroll"] = trading["bankroll"]
+                trading.setdefault("trade_log", [])
+                trading["trade_log"].append({
+                    "win": win, "pnl": pnl, "market_id": market_id,
+                    "bankroll_after": trading["bankroll"], "timestamp": now(),
+                })
+                trading["trade_log"] = trading["trade_log"][-200:]
+            # Also update risk state
+            try:
+                from engine.risk import record_trade_result
+                record_trade_result(win, pnl)
+            except ImportError:
+                try:
+                    sys.path.insert(0, str(Path(__file__).resolve().parent))
+                    from risk import record_trade_result
+                    record_trade_result(win, pnl)
+                except ImportError:
+                    pass
+            print(json.dumps({"status": "recorded", "win": win, "pnl": pnl,
+                              "bankroll": trading["bankroll"]}))
         elif cmd == "reset":
             cmd_reset(force="--force" in sys.argv)
         elif cmd == "export":

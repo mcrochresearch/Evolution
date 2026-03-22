@@ -84,7 +84,7 @@ class TestInit:
         state_file = isolated_state / "state" / "evolution.json"
         assert state_file.exists()
         data = json.loads(state_file.read_text())
-        assert data["version"] == 3
+        assert data["version"] == 4
         assert data["goal"] == "Test goal"
         assert data["cycle"] == 0
         assert data["phase"] == "GENESIS"
@@ -515,7 +515,7 @@ class TestStateMigration:
         out, rc = run_cmd(STATE_PY, "status")
         assert rc == 0
         state = json.loads(state_file.read_text())
-        assert state["version"] == 3
+        assert state["version"] == 4
         assert "cumulative_regret" in state
         assert "max_cycles" in state
 

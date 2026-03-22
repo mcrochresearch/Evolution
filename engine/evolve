@@ -542,6 +542,195 @@ case "$CMD" in
         python3 "$ENGINE_DIR/state.py" deploy-threshold "$@"
         ;;
 
+    # --- Trading: State Management ---
+    trading-init)
+        python3 "$ENGINE_DIR/state.py" trading-init "$@"
+        ;;
+    trading-record)
+        python3 "$ENGINE_DIR/state.py" trading-record "$@"
+        ;;
+
+    # --- Trading: Kelly Criterion Position Sizing ---
+    kelly-size)
+        python3 "$ENGINE_DIR/kelly.py" size "$@"
+        ;;
+    kelly-multi)
+        python3 "$ENGINE_DIR/kelly.py" multi "$@"
+        ;;
+    kelly-simulate)
+        python3 "$ENGINE_DIR/kelly.py" simulate "$@"
+        ;;
+    kelly-portfolio)
+        python3 "$ENGINE_DIR/kelly.py" portfolio "$@"
+        ;;
+
+    # --- Trading: Risk Management Circuit Breakers ---
+    risk-check)
+        python3 "$ENGINE_DIR/risk.py" check "$@"
+        ;;
+    risk-drawdown)
+        python3 "$ENGINE_DIR/risk.py" drawdown "$@"
+        ;;
+    risk-can-trade)
+        python3 "$ENGINE_DIR/risk.py" can-trade "$@"
+        ;;
+    risk-status)
+        python3 "$ENGINE_DIR/risk.py" status "$@"
+        ;;
+    risk-reset-daily)
+        python3 "$ENGINE_DIR/risk.py" reset-daily
+        ;;
+    risk-record)
+        python3 "$ENGINE_DIR/risk.py" record "$@"
+        ;;
+
+    # --- Trading: Smart Money Tracker ---
+    wallet-add)
+        python3 "$ENGINE_DIR/smart_money.py" add-wallet "$@"
+        ;;
+    wallet-profile)
+        python3 "$ENGINE_DIR/smart_money.py" profile "$@"
+        ;;
+    wallet-signals)
+        python3 "$ENGINE_DIR/smart_money.py" signals "$@"
+        ;;
+    wallet-enrich)
+        python3 "$ENGINE_DIR/smart_money.py" enrich "$@"
+        ;;
+    wallet-status)
+        python3 "$ENGINE_DIR/smart_money.py" status
+        ;;
+
+    # --- Trading: Weather Edge Calculator ---
+    weather-edge)
+        python3 "$ENGINE_DIR/weather_edge.py" edge "$@"
+        ;;
+    weather-scan)
+        python3 "$ENGINE_DIR/weather_edge.py" scan "$@"
+        ;;
+    weather-forecast)
+        python3 "$ENGINE_DIR/weather_edge.py" forecast "$@"
+        ;;
+
+    # --- Trading: Open-Meteo Forecast Fetcher ---
+    weather-fetch)
+        python3 "$ENGINE_DIR/weather_fetcher.py" fetch "$@"
+        ;;
+    weather-fetch-range)
+        python3 "$ENGINE_DIR/weather_fetcher.py" fetch-range "$@"
+        ;;
+    weather-evaluate)
+        python3 "$ENGINE_DIR/weather_fetcher.py" evaluate "$@"
+        ;;
+    weather-cache-clear)
+        python3 "$ENGINE_DIR/weather_fetcher.py" clear-cache "$@"
+        ;;
+
+    # --- Trading: Wallet Activity Poller ---
+    wallet-poll)
+        python3 "$ENGINE_DIR/wallet_poller.py" poll "$@"
+        ;;
+    wallet-poll-all)
+        python3 "$ENGINE_DIR/wallet_poller.py" poll-all "$@"
+        ;;
+    wallet-profile-live)
+        python3 "$ENGINE_DIR/wallet_poller.py" profile "$@"
+        ;;
+    wallet-discover)
+        python3 "$ENGINE_DIR/wallet_poller.py" discover "$@"
+        ;;
+    wallet-poller-status)
+        python3 "$ENGINE_DIR/wallet_poller.py" status
+        ;;
+
+    # --- Trading: Sports Edge Calculator ---
+    sports-elo)
+        python3 "$ENGINE_DIR/sports_edge.py" elo "$@"
+        ;;
+    sports-devig)
+        python3 "$ENGINE_DIR/sports_edge.py" devig "$@"
+        ;;
+    sports-edge)
+        python3 "$ENGINE_DIR/sports_edge.py" edge "$@"
+        ;;
+    sports-evaluate)
+        python3 "$ENGINE_DIR/sports_edge.py" evaluate "$@"
+        ;;
+    sports-multi)
+        python3 "$ENGINE_DIR/sports_edge.py" multi-source "$@"
+        ;;
+
+    # --- Trading: Sports Data Fetcher (ESPN + Odds API) ---
+    sports-espn)
+        python3 "$ENGINE_DIR/sports_fetcher.py" espn "$@"
+        ;;
+    sports-odds)
+        python3 "$ENGINE_DIR/sports_fetcher.py" odds "$@"
+        ;;
+    sports-fetch-evaluate)
+        python3 "$ENGINE_DIR/sports_fetcher.py" evaluate "$@"
+        ;;
+    sports-list)
+        python3 "$ENGINE_DIR/sports_fetcher.py" list-sports
+        ;;
+    sports-cache-clear)
+        python3 "$ENGINE_DIR/sports_fetcher.py" clear-cache "$@"
+        ;;
+
+    # --- Trading: Politics & Economics Edge ---
+    politics-polls)
+        python3 "$ENGINE_DIR/politics_edge.py" aggregate-polls "$@"
+        ;;
+    politics-evaluate)
+        python3 "$ENGINE_DIR/politics_edge.py" evaluate "$@"
+        ;;
+    politics-arb)
+        python3 "$ENGINE_DIR/politics_edge.py" structural-arb "$@"
+        ;;
+    politics-stale)
+        python3 "$ENGINE_DIR/politics_edge.py" stale-check "$@"
+        ;;
+
+    # --- Trading: Position Management (phantom position killer) ---
+    pos-open)
+        python3 "$ENGINE_DIR/positions.py" open "$@"
+        ;;
+    pos-confirm)
+        python3 "$ENGINE_DIR/positions.py" confirm "$@"
+        ;;
+    pos-fail)
+        python3 "$ENGINE_DIR/positions.py" fail "$@"
+        ;;
+    pos-close)
+        python3 "$ENGINE_DIR/positions.py" close "$@"
+        ;;
+    pos-list)
+        python3 "$ENGINE_DIR/positions.py" list "$@"
+        ;;
+    pos-reconcile)
+        python3 "$ENGINE_DIR/positions.py" reconcile "$@"
+        ;;
+    pos-expire)
+        python3 "$ENGINE_DIR/positions.py" expire-stale "$@"
+        ;;
+    pos-status)
+        python3 "$ENGINE_DIR/positions.py" status
+        ;;
+
+    # --- Trading: Full Pipeline (weather → enrich → kelly → risk gate) ---
+    trade-evaluate)
+        python3 "$ENGINE_DIR/trade_pipeline.py" evaluate "$@"
+        ;;
+    trade-execute)
+        python3 "$ENGINE_DIR/trade_pipeline.py" execute "$@"
+        ;;
+    trade-status)
+        python3 "$ENGINE_DIR/trade_pipeline.py" status
+        ;;
+    trade-history)
+        python3 "$ENGINE_DIR/trade_pipeline.py" history "$@"
+        ;;
+
     # --- Harness (Outer Loop) ---
     harness)
         python3 "$ENGINE_DIR/harness.py" "$@"
@@ -593,6 +782,23 @@ case "$CMD" in
         echo "Closed-Loop: validate | critique | heal | pipeline-check"
         echo "             loop-configure | loop-status | loop-history"
         echo "Deploy:      deploy-threshold [value]"
+        echo "Trading:     kelly-size | kelly-multi | kelly-simulate | kelly-portfolio"
+        echo "Positions:   pos-open | pos-confirm | pos-fail | pos-close | pos-list"
+        echo "             pos-reconcile | pos-expire | pos-status"
+        echo "Risk:        risk-check | risk-drawdown | risk-can-trade | risk-status"
+        echo "             risk-reset-daily | risk-record"
+        echo "Wallets:     wallet-add | wallet-profile | wallet-signals | wallet-enrich"
+        echo "             wallet-status | wallet-poll | wallet-poll-all"
+        echo "             wallet-profile-live | wallet-discover | wallet-poller-status"
+        echo "Sports:      sports-elo | sports-devig | sports-edge | sports-evaluate"
+        echo "             sports-multi | sports-espn | sports-odds"
+        echo "             sports-fetch-evaluate | sports-list | sports-cache-clear"
+        echo "Politics:    politics-polls | politics-evaluate | politics-arb"
+        echo "             politics-stale"
+        echo "Weather:     weather-edge | weather-scan | weather-forecast"
+        echo "             weather-fetch | weather-fetch-range | weather-evaluate"
+        echo "             weather-cache-clear"
+        echo "Pipeline:    trade-evaluate | trade-execute | trade-status | trade-history"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
         ;;
