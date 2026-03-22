@@ -612,6 +612,37 @@ case "$CMD" in
         python3 "$ENGINE_DIR/weather_edge.py" forecast "$@"
         ;;
 
+    # --- Trading: Open-Meteo Forecast Fetcher ---
+    weather-fetch)
+        python3 "$ENGINE_DIR/weather_fetcher.py" fetch "$@"
+        ;;
+    weather-fetch-range)
+        python3 "$ENGINE_DIR/weather_fetcher.py" fetch-range "$@"
+        ;;
+    weather-evaluate)
+        python3 "$ENGINE_DIR/weather_fetcher.py" evaluate "$@"
+        ;;
+    weather-cache-clear)
+        python3 "$ENGINE_DIR/weather_fetcher.py" clear-cache "$@"
+        ;;
+
+    # --- Trading: Wallet Activity Poller ---
+    wallet-poll)
+        python3 "$ENGINE_DIR/wallet_poller.py" poll "$@"
+        ;;
+    wallet-poll-all)
+        python3 "$ENGINE_DIR/wallet_poller.py" poll-all "$@"
+        ;;
+    wallet-profile-live)
+        python3 "$ENGINE_DIR/wallet_poller.py" profile "$@"
+        ;;
+    wallet-discover)
+        python3 "$ENGINE_DIR/wallet_poller.py" discover "$@"
+        ;;
+    wallet-poller-status)
+        python3 "$ENGINE_DIR/wallet_poller.py" status
+        ;;
+
     # --- Trading: Full Pipeline (weather → enrich → kelly → risk gate) ---
     trade-evaluate)
         python3 "$ENGINE_DIR/trade_pipeline.py" evaluate "$@"
@@ -681,8 +712,11 @@ case "$CMD" in
         echo "Risk:        risk-check | risk-drawdown | risk-can-trade | risk-status"
         echo "             risk-reset-daily | risk-record"
         echo "Wallets:     wallet-add | wallet-profile | wallet-signals | wallet-enrich"
-        echo "             wallet-status"
+        echo "             wallet-status | wallet-poll | wallet-poll-all"
+        echo "             wallet-profile-live | wallet-discover | wallet-poller-status"
         echo "Weather:     weather-edge | weather-scan | weather-forecast"
+        echo "             weather-fetch | weather-fetch-range | weather-evaluate"
+        echo "             weather-cache-clear"
         echo "Pipeline:    trade-evaluate | trade-execute | trade-status | trade-history"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"

@@ -33,6 +33,19 @@ def isolated_state(tmp_path, monkeypatch):
     state_dir.mkdir()
     monkeypatch.setenv("EVOLUTION_STATE_DIR", str(state_dir))
     monkeypatch.chdir(tmp_path)
+
+    # Patch module-level paths resolved at import time
+    import engine.risk as risk
+    import engine.smart_money as sm
+    import engine.trade_pipeline as tp
+
+    monkeypatch.setattr(risk, "STATE_DIR", state_dir)
+    monkeypatch.setattr(risk, "RISK_STATE_FILE", state_dir / "risk_state.json")
+    monkeypatch.setattr(sm, "STATE_DIR", state_dir)
+    monkeypatch.setattr(sm, "WALLET_DB_FILE", state_dir / "smart_money.json")
+    monkeypatch.setattr(tp, "STATE_DIR", state_dir)
+    monkeypatch.setattr(tp, "PIPELINE_LOG", state_dir / "trade_pipeline.jsonl")
+
     return state_dir
 
 
