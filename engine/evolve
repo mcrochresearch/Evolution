@@ -315,6 +315,40 @@ case "$CMD" in
         python3 "$ENGINE_DIR/outcomes.py" lessons
         ;;
 
+    # --- Benchmark ---
+    benchmark)
+        shift
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" "$@"
+        ;;
+    benchmark-list)
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" list
+        ;;
+    benchmark-record)
+        shift
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" record "$@"
+        ;;
+    benchmark-compare)
+        shift
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" compare "$@"
+        ;;
+    benchmark-report)
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" report
+        ;;
+    benchmark-autonomy)
+        shift
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" autonomy "$@"
+        ;;
+    benchmark-evidence)
+        check_python
+        python3 "$ENGINE_DIR/benchmark.py" evidence
+        ;;
+
     # --- Enforce (Anti-Passivity) ---
     enforce)
         python3 "$ENGINE_DIR/enforce.py" scan "$@"
@@ -593,6 +627,8 @@ case "$CMD" in
         echo "Closed-Loop: validate | critique | heal | pipeline-check"
         echo "             loop-configure | loop-status | loop-history"
         echo "Deploy:      deploy-threshold [value]"
+        echo "Benchmark:   benchmark | benchmark-list | benchmark-record | benchmark-compare"
+        echo "             benchmark-report | benchmark-autonomy | benchmark-evidence"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
         ;;
