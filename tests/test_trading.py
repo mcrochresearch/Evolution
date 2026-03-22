@@ -792,3 +792,208 @@ class TestSmartMoneyEnrichmentIntegration:
 
         if base["action"] == "BET" and boosted["action"] == "BET":
             assert boosted["position_usd"] >= base["position_usd"]
+
+
+# ============================================================================
+# TRADE PIPELINE TESTS — Full wired integration
+# ============================================================================
+
+class TestTradePipelineEvaluate:
+    """Test the full evaluate pipeline: signal → enrich → kelly → risk."""
+
+    def test_good_signal_produces_trade(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal
+        from engine.risk import save_risk_state, default_risk_state
+
+        # Set up risk state with bankroll
+        rs = default_risk_state()
+        rs["current_bankroll"] = 500
+        save_risk_state(rs)
+
+        result = evaluate_signal({
+            "market_id": "weather-ankara",
+            "category": "weather",
+            "fair_prob": 0.70,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+
+        assert result["action"] == "TRADE"
+        assert result["position_usd"] > 0
+        assert result["direction"] == "YES"
+        assert len(result["stages"]) == 4  # SIGNAL, ENRICH, SIZE, RISK_GATE
+        assert all(s["status"] != "BLOCKED" for s in result["stages"])
+
+    def test_no_edge_skips(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal
+
+        result = evaluate_signal({
+            "market_id": "no-edge",
+            "category": "weather",
+            "fair_prob": 0.50,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+
+        assert result["action"] == "SKIP"
+
+    def test_low_confidence_blocked(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal
+
+        result = evaluate_signal({
+            "market_id": "low-conf",
+            "category": "weather",
+            "fair_prob": 0.60,
+            "market_price": 0.50,
+            "confidence": 0.3,  # Below MIN_CONFIDENCE_TO_TRADE
+            "bankroll": 500,
+        })
+
+        assert result["action"] == "SKIP"
+        assert "confidence" in result["reason"].lower()
+
+    def test_risk_halted_blocks_trade(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal
+        from engine.risk import save_risk_state, default_risk_state
+
+        rs = default_risk_state()
+        rs["current_bankroll"] = 500
+        rs["halted"] = True
+        rs["halt_reason"] = "5 consecutive losses"
+        save_risk_state(rs)
+
+        result = evaluate_signal({
+            "market_id": "halted-test",
+            "category": "weather",
+            "fair_prob": 0.80,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+
+        assert result["action"] == "BLOCKED"
+
+    def test_smart_money_enrichment_wired(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal
+        from engine.smart_money import add_wallet, record_wallet_entry
+
+        add_wallet("0xwhale", initial_data={
+            "trades_total": 100, "trades_won": 70,
+            "portfolio_value_usd": 200000,
+        })
+        record_wallet_entry("0xwhale", "enriched-market", "YES", 5000, 0.55)
+
+        result = evaluate_signal({
+            "market_id": "enriched-market",
+            "category": "weather",
+            "fair_prob": 0.70,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+
+        # Check enrichment stage ran
+        enrich_stage = [s for s in result["stages"] if s["stage"] == "ENRICH"][0]
+        assert enrich_stage["smart_money_present"] is True
+        assert enrich_stage["status"] == "BOOST"
+
+    def test_pipeline_logs_events(self, isolated_state):
+        from engine.trade_pipeline import evaluate_signal, get_pipeline_history
+
+        evaluate_signal({
+            "market_id": "log-test",
+            "category": "weather",
+            "fair_prob": 0.70,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+
+        history = get_pipeline_history()
+        assert len(history) >= 1
+        assert history[-1]["market_id"] == "log-test"
+
+
+class TestTradePipelineWeather:
+    """Test the weather convenience pipeline."""
+
+    def test_weather_market_evaluation(self, isolated_state):
+        from engine.trade_pipeline import evaluate_weather_market
+
+        result = evaluate_weather_market(
+            forecast_mean=15.0,
+            days_ahead=1,
+            bucket_edges=[12, 14, 16, 18],
+            market_prices=[0.05, 0.15, 0.50, 0.20, 0.05],
+            bankroll=500,
+        )
+
+        assert "weather_analysis" in result
+        assert "pipeline_results" in result
+        assert result["weather_analysis"]["forecast_mean"] == 15.0
+        assert result["trades_approved"] >= 0
+        assert result["trades_skipped"] >= 0
+
+
+class TestTradePipelineStatus:
+    """Test pipeline status reporting."""
+
+    def test_status_returns_all_subsystems(self, isolated_state):
+        from engine.trade_pipeline import get_pipeline_status
+
+        status = get_pipeline_status()
+
+        assert status["pipeline_operational"] is True
+        assert "risk" in status
+        assert "smart_money" in status
+        assert "bankroll" in status
+
+
+class TestTradePipelineCLI:
+    """Test pipeline CLI commands."""
+
+    def test_evaluate_cli(self, isolated_state):
+        signal = json.dumps({
+            "market_id": "cli-test",
+            "category": "weather",
+            "fair_prob": 0.70,
+            "market_price": 0.50,
+            "bankroll": 500,
+        })
+        data, rc = run_cmd("trade_pipeline.py", "evaluate", signal)
+        assert rc == 0
+        assert data.get("action") in ("TRADE", "SKIP", "BLOCKED")
+
+    def test_status_cli(self, isolated_state):
+        data, rc = run_cmd("trade_pipeline.py", "status")
+        assert rc == 0
+        assert data.get("pipeline_operational") is True
+
+
+class TestEvolveCLIWiring:
+    """Test that trading commands are wired into the evolve CLI."""
+
+    def test_kelly_size_via_evolve(self):
+        result = subprocess.run(
+            ["bash", str(ENGINE_DIR.parent / "engine" / "evolve"), "kelly-size", "0.70", "0.50", "1000"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data.get("action") == "BET"
+
+    def test_risk_drawdown_via_evolve(self):
+        result = subprocess.run(
+            ["bash", str(ENGINE_DIR.parent / "engine" / "evolve"), "risk-drawdown", "1000", "880"],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data.get("level") == "WARNING"
+
+    def test_weather_edge_via_evolve(self):
+        result = subprocess.run(
+            ["bash", str(ENGINE_DIR.parent / "engine" / "evolve"), "weather-edge",
+             "15.0", "1", json.dumps([13, 15, 17]), json.dumps([0.10, 0.30, 0.40, 0.10])],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "buckets" in data

@@ -543,6 +543,19 @@ def main():
             result = get_risk_dashboard(bankroll, positions)
             print(json.dumps(result, indent=2))
 
+        elif cmd == "record":
+            if len(sys.argv) < 4:
+                print(json.dumps({"error": "Usage: record <win|loss> <pnl_usd>"}))
+                sys.exit(1)
+            win = sys.argv[2].lower() == "win"
+            pnl = float(sys.argv[3])
+            state = record_trade_result(win, pnl)
+            print(json.dumps({
+                "status": "recorded", "win": win, "pnl": pnl,
+                "consecutive_losses": state["consecutive_losses"],
+                "halted": state.get("halted", False),
+            }, indent=2))
+
         elif cmd == "reset-daily":
             result = reset_daily()
             print(json.dumps({"status": "daily_reset", "daily_pnl": result["daily_pnl"]}))
