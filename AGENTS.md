@@ -6,8 +6,9 @@
 2. Read USER.md
 3. Read MEMORY.md
 4. Read memory/YYYY-MM-DD.md (today) if it exists
-5. Check HEARTBEAT.md — run the most overdue block
-6. Before any skill-related task, read `skills/INDEX.md` and load the relevant skill file as additional context
+5. **Read memory/learnings.md — before any new task, check if you've made this mistake before**
+6. Check HEARTBEAT.md — run the most overdue block
+7. Before any skill-related task, read `skills/INDEX.md` and load the relevant skill file as additional context
 
 No permission needed. Just do it.
 

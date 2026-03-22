@@ -178,3 +178,158 @@ Failures that don't generate playbook updates are wasted failures.
 ---
 
 *Applied from: Anthropic Building Effective Agents blog, Lilian Weng LLM Agents post, self-healing infrastructure research, AutoAct division-of-labor paper*
+
+---
+
+## PATTERN 8: WSJF — Weighted Shortest Job First (Upgrade from ICE)
+
+*Research synthesis: 2026-03-20 | Source: SAFe framework + Don Reinertsen "Principles of Product Development Flow" + Cost of Delay theory*
+
+**ICE is wrong for autonomous systems.** ICE ignores time value — a task scored 180 today might be worth 360 tomorrow if the window closes. WSJF fixes this by making Cost of Delay explicit.
+
+**Formula:**
+```
+WSJF = Cost_of_Delay / Job_Duration
+
+Cost_of_Delay = User_Value + Time_Criticality + Risk_Reduction_or_Opportunity_Enablement
+
+Scoring scale (1, 2, 3, 5, 8, 13, 20) — Fibonacci, relative not absolute.
+```
+
+| Component | What It Measures | Example |
+|-----------|-----------------|---------|
+| **User Value** | Revenue/retention impact if done now vs. later | Client onboarding: 13 |
+| **Time Criticality** | How fast does value decay if delayed? | Lead follow-up (24h window): 20 |
+| **Risk Reduction / Opportunity Enablement** | Does this unblock other work or remove downside risk? | Fix broken email agent (blocks outreach): 13 |
+| **Job Duration** | Relative effort — how long to complete + verify? | 30min task: 2, half-day: 5, full-day: 8 |
+
+**Example queue scoring:**
+```
+Task A: Fix broken review_monitor (blocks client SLA)
+  CoD = 8 (value) + 13 (time-critical) + 13 (unblocks) = 34
+  Duration = 2 (30min fix)
+  WSJF = 34/2 = 17.0 ← DO FIRST
+
+Task B: Research new vertical (plumbers)
+  CoD = 5 (value) + 2 (not urgent) + 3 (enables future) = 10
+  Duration = 3 (90min deep research)
+  WSJF = 10/3 = 3.3 ← do later
+
+Task C: Send follow-up to warm lead (24h window closing)
+  CoD = 8 (close value) + 20 (expires in hours) + 3 = 31
+  Duration = 1 (5min email)
+  WSJF = 31/1 = 31.0 ← DO BEFORE Task A if truly < 5min
+```
+
+**Key insight:** WSJF automatically deprioritizes big speculative projects vs. small high-CoD tasks. The shortest job that prevents the most delay always wins.
+
+---
+
+## PATTERN 9: Entropy-Aware Scheduling
+
+Some tasks rot. They get harder, more expensive, or impossible the longer they wait.
+
+**Entropy multiplier — apply to WSJF Time_Criticality component:**
+
+```
+ENTROPY CLASS       DECAY RATE    TIME_CRITICALITY MULTIPLIER
+Perishable          Hours         ×3 (leads, time-sensitive follow-ups, error spikes)
+Degrading           Days          ×1.5 (infrastructure drift, stale configs, low reviews)
+Stable              Weeks         ×1 (feature builds, research tasks)
+Appreciation        —             ×0.5 (deferred = more info = better decision)
+```
+
+**Perishable tasks (do TODAY, not "eventually"):**
+- Lead follow-up after inquiry or demo (> 24h = 80% conversion drop)
+- Negative review response (> 48h = visible abandonment to other readers)
+- Agent error accumulation (cascading failures, > 4h backlog = data loss)
+- Session-critical research (context evaporates after 48h without application)
+
+**Appreciation tasks (intentionally defer):**
+- Architecture decisions with missing info → wait for data
+- Vendor selection before having clear requirements → wait for client feedback
+- Scaling decisions before hitting actual limits → don't pre-optimize
+
+**Rule:** On every boot, scan for perishable tasks FIRST. They trump WSJF score.
+
+---
+
+## PATTERN 10: Type 1 / Type 2 Decision Router
+
+*From Bezos "Day 1 vs Day 2" framework, adapted for autonomous agents*
+
+Two-question test before every action:
+
+```
+Q1: Is this reversible in < 5 minutes?
+Q2: Does failure affect live users, money, or reputation?
+
+          | Reversible | Irreversible |
+Contained |  TYPE 2    |   TYPE 2+    |
+External  |  TYPE 2+   |   TYPE 1     |
+```
+
+**TYPE 2 (most things): Decide fast, execute, measure.**
+- File edits, internal config changes, draft outreach, agent restarts
+- Threshold: < 1 second decision time. Don't overthink.
+- Failed TYPE 2 → fix it in < 5 min and move on.
+
+**TYPE 2+ (moderate stakes): Checkpoint first, then execute.**
+- DB migrations, production config changes, agent prompt updates
+- Rule: `./engine/evolve checkpoint "before [action]"` then proceed
+- Failed TYPE 2+ → `./engine/evolve revert` and diagnose
+
+**TYPE 1 (rare, high stakes): Slow down, verify twice, confirm with Pat if money.**
+- Sending bulk outreach for the first time to a new list
+- Deploying to production LocalComm (live client data)
+- Any action touching live billing or payment data
+- Rule: Premortem first (`./engine/evolve premortem`), verify intent, checkpoint, execute, verify output before proceeding.
+
+**Default:** 95% of agent decisions are TYPE 2. Don't let TYPE 1 caution infect TYPE 2 speed.
+
+---
+
+## PATTERN 11: Critical Path Multiplier for Queue
+
+Any task that is blocking N other tasks gets a geometric urgency boost — not flat.
+
+```python
+# In WSJF calculation, adjust Cost_of_Delay:
+blocking_multiplier = 1 + (0.5 * count_of_blocked_tasks)
+
+effective_CoD = base_CoD * blocking_multiplier
+
+# Examples:
+# Task blocks 0 others: CoD × 1.0 (no change)
+# Task blocks 1 other: CoD × 1.5
+# Task blocks 2 others: CoD × 2.0 (double the urgency)
+# Task blocks 5 others: CoD × 3.5 (critical path, highest priority)
+```
+
+**Practical application:**
+- Fix broken outreach agent (blocks 15 leads/day) → CoD ×3.5 minimum
+- Add API key to environment (blocks 3 agents) → CoD ×2.5
+- Research a new vertical (blocks nobody) → CoD ×1.0
+
+**When stuck:** Map the dependency graph. The node with the most downstream dependents gets fixed first. Always.
+
+---
+
+## PATTERN 12: 2-Minute Rule for Queue Drainage
+
+*From GTD (David Allen) adapted for agent systems*
+
+Any task completable in < 2 minutes bypasses WSJF scoring and executes immediately.
+
+**Why:** Scheduling overhead for sub-2min tasks exceeds their deferral cost. They also create psychological/operational drag on the queue — long lists of tiny tasks generate false complexity.
+
+**Application:**
+- Send one follow-up email: 90 seconds → do it NOW
+- Restart a downed agent with a known fix: 60 seconds → do it NOW
+- Add a lead to memory/leads.md: 30 seconds → do it NOW  
+- Write a one-line status update: 45 seconds → do it NOW
+
+**Anti-pattern:** Never put a sub-2min task in a priority queue. Execute on encounter.
+
+**Exception:** If you have > 10 sub-2min tasks, batch them (2-min rule → batch mode). Sequential tiny tasks are fine; scattered interruption of deep work is not.
+

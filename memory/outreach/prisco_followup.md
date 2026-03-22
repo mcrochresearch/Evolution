@@ -21,7 +21,7 @@ I built a specific action plan for Prisco — three things that would generate m
 Are you free for a call this week or next?
 
 — Shelly
-LocalComm · [email]
+LocalComm · localcomm.co · (203) 555-0100
 
 ---
 

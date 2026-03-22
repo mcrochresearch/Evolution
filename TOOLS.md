@@ -61,5 +61,5 @@ SearXNG runs locally at `http://127.0.0.1:8888`. No API key. No rate limits. Alw
 
 ## Telegram
 
-- Bot: @Shellytraderbot
+- Bot: @Mrsheldonkrabsbot
 - Pat's ID: 1830363373

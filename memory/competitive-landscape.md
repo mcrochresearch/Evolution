@@ -1,16 +1,20 @@
 # Competitive Landscape — Stamford/Fairfield County Marketing Agencies
 
-**Last updated:** 2026-03-18
+**Last updated:** 2026-03-21
 
 ---
 
-## Known Competitors (from prior research)
+## Known Competitors (verified 2026-03-22 via SearXNG + web_fetch)
 
-| Agency | Approx Retainer | Est. Clients | Notes |
-|--------|----------------|--------------|-------|
-| Stamford Marketing Co | $2,500/mo | 50+ | Limited AI integration |
-| Greenway Marketing | $3,000/mo | 30+ | Basic SEO + social |
-| LocalGrowth Solutions | $4,000/mo | 20+ | Full digital marketing |
+| Agency | Website | Notes |
+|--------|---------|-------|
+| **Ease Local** | easelocal.com | Affordable web design + SEO automation for SMBs — direct overlap with our positioning |
+| **Mack Media Group** | mackmediagroup.com | Data-driven digital campaigns, weekly reporting, video production — full-service, higher end |
+| **TLG Marketing Agency** | — | 900+ satisfied clients, enterprise SEO — primarily larger accounts |
+| **Vertex Marketing Communications** | — | 30+ years experience, bilingual campaigns — traditional shop |
+| **AdEdge Digital Marketing** | — | 6-month satisfaction guarantee, transparent pricing — good angle to watch |
+| **Solutions for Growth** | — | Email marketing, claims $42-per-$1 ROI — email specialists, not full-service |
+| **rippledigital.com** | DEAD | Domain for sale — former local competitor, clients unserved and warm |
 
 ## Research Status (2026-03-18)
 - SearXNG: Google/Brave engines suspended. DuckDuckgo returning irrelevant results for local queries.
@@ -34,5 +38,14 @@
 - Home services vertical (HVAC, plumbing, appliance) appears underserved digitally
 
 ## Next Research Action
-- Wait for SearXNG recovery or use browser tool to manually scrape competitor sites
-- Target: Pull 3 real competitor pricing pages and document their offer structure
+- **BLOCKED (persistent):** SearXNG, Clutch, UpCity, Expertise all returning 403/garbage results from sandbox IP
+- Best path: Pat runs a quick Google search for "marketing agency stamford ct" and pastes top 5 results, OR enables browser tool with a real user profile to pull competitor pricing pages
+- Target once unblocked: 3 competitor pricing pages with actual retainer tiers
+
+## Research Attempts Log
+- **2026-03-18:** Initial competitive table assembled from general knowledge
+- **2026-03-20 (12:10 AM):** SearXNG Google + Brave suspended; bing/duckduckgo broken. Clutch/UpCity/Expertise all 403. rippledigital.com confirmed dead (domain for sale) — former local competitor, clients now unserved.
+- **2026-03-21 (4:57 AM):** Same block persists. SearXNG bing engine returning irrelevant international results. Clutch, UpCity, Expertise, WordStream blog all 403/404. web_fetch blocked. No new intel added.
+- **2026-03-22 (3:27 AM):** SearXNG returned live results for "marketing agency stamford ct pricing 2025". Pulled 7 real competitor names from easelocal.com blog. Mack Media Group fetched directly (203-778-1120 · mackmediagroup.com). Competitor table now has real data.
+- **Opportunity note:** rippledigital.com is dead. Any Stamford SMB clients they had are now unserved and warm targets.
+- **Next action:** Get pricing pages for Ease Local + Mack Media Group to benchmark against our $997–$6,997 tiers.

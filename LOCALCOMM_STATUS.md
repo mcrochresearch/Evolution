@@ -55,3 +55,169 @@ BLOCKERS:
 3. Create a Stamford plumbers landing page + run Google Ads at $300/mo to test CPL.
 4. Close Prisco Appliance on annual plan before month 1 ends — lock in the retention.
 5. Add referral ask to onboarding flow: "Know another Stamford business? Send them this."
+
+---
+
+## COMPETITIVE INTELLIGENCE
+*Last updated: 2026-03-21*
+
+### The Landscape — Who We're Fighting (and Who We're Not)
+
+#### Vendasta (Agency-Reseller Model)
+- **Business model:** Sells to agencies/partners who resell to SMBs. NOT direct-to-SMB.
+- **Pricing:** Minimum spend tiers ($30-$65/seat/month), 1-20+ SMB client buckets. Complicated.
+- **Positioning:** "AI Workforce packages" — Conversations AI, Reputation AI. Enterprise-flavored.
+- **Weakness:** SMBs never interact with Vendasta directly. Zero brand affinity. Partners are the bottleneck.
+- **Our angle:** We ARE the agency AND the SaaS. No middleman. Faster decisions, personal relationships.
+
+#### Birdeye ("Service-as-a-Software")
+- **Business model:** Direct to multi-location brands/enterprises. Reviews + Social + Analytics unified.
+- **Pricing:** Not public. Estimated $300-$800/mo per location. Enterprise sales cycle.
+- **Positioning:** "Agentic AI" that runs marketing workflows automatically. Smart framing.
+- **Weakness:** Built for multi-location chains (dental groups, franchises). Overkill for single-location SMBs. Long sales cycle kills SMB deal velocity.
+- **Our angle:** We're purpose-built for single-location Stamford businesses. Faster to value, cheaper, personal.
+
+#### Podium / Yext
+- Podium: Messaging/reviews focus, $289-$499/mo. Weak on content generation.
+- Yext: Listings management, $199-$449/mo. No AI execution — just data syndication.
+- Both require the SMB to do the work. We do it for them.
+
+### The Positioning Triangle
+
+```
+                    ENTERPRISE
+                   Birdeye/Yext
+                       △
+                      / \
+         AGENCY      /   \    DIRECT-TO-SMB
+         Vendasta   /     \   LocalComm ← WE ARE HERE
+                   /       \
+                  ▽_________▽
+              COMPLEX            SIMPLE
+```
+
+**Our lane:** Direct-to-SMB, simple pricing, fully autonomous execution.
+No sales call needed for $149. Done-for-you at $397. Hands-off at $997.
+
+### Pricing Moat vs. Competitors
+| Competitor | SMB Cost | Who Does the Work? |
+|-----------|---------|-------------------|
+| Vendasta (via agency) | $500-2000/mo | Agency (us, but with overhead) |
+| Birdeye | $300-800/location | SMB still has to log in |
+| Podium | $289-499/mo | SMB manages conversations |
+| Traditional agency | $1500-3000/mo | Humans (slow, expensive) |
+| **LocalComm Managed** | **$997/mo** | **AI (fully autonomous)** |
+
+**The pitch:** "The AI does what a $3K/mo agency does. We charge $997. You don't manage it."
+
+### 3 Immediate Strategic Moves (From Competitive Gap Analysis)
+
+1. **OWN "DONE-FOR-YOU" POSITIONING** — Birdeye and Podium require SMB effort. Our entire pitch is zero SMB effort. Make this explicit on every surface: website, outreach, onboarding.
+
+2. **UNDERCUT ON ENTRY, UPSELL ON OUTCOMES** — $149 Self-Service is cheaper than any competitor. Get them in, show wins, upsell to $997. Competitors don't have a low-friction entry point.
+
+3. **GEOGRAPHIC MOAT** — Neither Birdeye nor Vendasta will do a personalized Stamford-specific campaign. We know local competitors, local directories, local newspapers. Build the "Stamford Specialist" brand before anyone else does.
+
+---
+
+## GROWTH LOOPS ARCHITECTURE
+*Last updated: 2026-03-21*
+
+### The Difference: Funnels vs. Loops
+
+**Funnel thinking** (what most agencies do):
+```
+Paid Ad → Landing Page → Trial → Convert → Done
+```
+Every new customer requires new spend. CAC never improves. Linear ceiling.
+
+**Loop thinking** (what compounds to $1M ARR):
+```
+Customer value → triggers referral/SEO/review → generates new customer → repeat
+```
+Each customer makes acquisition of the NEXT customer cheaper. Compounding curve.
+
+### LocalComm's 4 Core Growth Loops
+
+---
+
+#### LOOP 1: THE REVIEW FLYWHEEL (Fastest to activate)
+```
+We manage reviews → client gets more 5-star reviews → 
+Google ranking improves → more Google traffic → 
+business gets more customers → owner is happy → 
+owner refers us → new client → repeat
+```
+**Mechanism:** Review management (already in platform) drives organic growth for the SMB.
+Their growth = our retention = their referral of us.
+
+**Trigger point:** Client hits 4.5+ star average + 20% traffic increase → AUTOMATED referral ask fires.
+**Implementation:** Add to review_monitor agent: track star average trajectory. When 4.5+ sustained 30 days → trigger referral email sequence.
+
+---
+
+#### LOOP 2: THE CONTENT AUTHORITY LOOP (SEO compounding)
+```
+We publish hyper-local content → Google indexes it → 
+"Stamford plumber reviews" ranks → SMB owner finds us →
+Signs up → we publish MORE content for them → 
+their SEO improves → they refer us → repeat
+```
+**Mechanism:** Every client's LocalComm content output becomes a LocalComm acquisition channel.
+"Powered by LocalComm" footer on published content = distributed SEO signal.
+
+**Trigger point:** After 90 days of content publishing, client's organic traffic data → build case study → publish as landing page.
+**Implementation:** social_publisher agent adds subtle "Published with LocalComm AI" attribution (client-approved). Build 3 vertical landing pages from first 3 client case studies.
+
+---
+
+#### LOOP 3: THE VERTICAL SATURATION LOOP (Defensible moat)
+```
+Sign 1 plumber in Stamford → build deep plumber playbook →
+outreach to ALL Stamford plumbers with "we work with [CompetitorName]" social proof →
+sign 2nd plumber → social proof increases → 
+full vertical saturation → own the vertical → repeat in next vertical
+```
+**Mechanism:** Being "the agency for Stamford plumbers" makes every subsequent plumber outreach 3x easier.
+First client = case study. Third client = category authority.
+
+**Trigger point:** 2 clients in same vertical → vertical landing page goes live → outreach to all remaining vertical members references category authority.
+**Implementation:** Track verticals in agency_state.db. Auto-trigger vertical saturation campaign when count ≥ 2.
+
+---
+
+#### LOOP 4: THE RESULTS PROOF LOOP (Upsell + expansion)
+```
+Client on $149 Self-Service → monthly ROI report shows wins →
+upgrade conversation → moves to $397 Assisted →
+ROI report shows bigger wins → upgrade to $997 Managed →
+becomes champion → refers two $149 clients →
+those clients upgrade → MRR compounds
+```
+**Mechanism:** The automated monthly ROI report IS the sales call. No human needed.
+Each tier upgrade is triggered by measurable outcomes, not a sales rep.
+
+**Trigger point:** Client on lower tier with ROI metrics exceeding tier's value → automated upgrade nudge email fires.
+**Implementation:** analytics agent generates ROI score monthly. If ROI > 3x tier price → send "You've outgrown Self-Service" email with one-click upgrade link.
+
+---
+
+### Loop Activation Priority (WSJF Order)
+
+| Loop | Speed | Leverage | Blocks Others? | Priority |
+|------|-------|----------|----------------|----------|
+| Review Flywheel | Fast (30 days) | Medium | No | 2 |
+| Results Proof Loop | Medium (60 days) | HIGH | Yes (upsell revenue) | 1 |
+| Vertical Saturation | Medium (90 days) | HIGH | Blocks moat building | 3 |
+| Content Authority | Slow (6 months) | Very High | No | 4 |
+
+**Activate RESULTS PROOF LOOP first** — it compounds existing clients (zero acquisition cost) AND unblocks expansion revenue.
+
+### Implementation Checklist (Next 14 Days)
+
+- [ ] Build monthly ROI report template (pulls: review count, star avg delta, social post count, traffic estimate)
+- [ ] Add ROI score calculation to analytics agent: score = (results delivered / tier price) × 10
+- [ ] Build upgrade trigger email: fires when ROI score > 30 on $149 tier, > 25 on $397 tier
+- [ ] Add referral trigger to review_monitor: fires when client hits 4.5+ stars sustained 30 days
+- [ ] Add vertical tracking query to agency_state.db: `SELECT vertical, COUNT(*) FROM brand_profiles GROUP BY vertical HAVING COUNT(*) >= 2`
+
