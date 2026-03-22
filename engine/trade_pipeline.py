@@ -87,7 +87,15 @@ def evaluate_signal(signal: dict) -> dict:
     category = signal.get("category", "unknown")
     fair_prob = signal.get("fair_prob", 0.5)
     market_price = signal.get("market_price", 0.5)
-    confidence = signal.get("confidence", CONFIDENCE_WEATHER if category == "weather" else 0.7)
+    # Category-aware default confidence
+    default_confidence = {
+        "weather": CONFIDENCE_WEATHER,  # 0.85 — real data
+        "sports": 0.70,                 # Multi-source model odds
+        "politics": 0.55,               # Polls are noisy
+        "economics": 0.55,              # Macro is hard
+        "crypto": 0.50,                 # Lowest confidence
+    }
+    confidence = signal.get("confidence", default_confidence.get(category, 0.60))
 
     # Load bankroll from risk state if not provided
     bankroll = signal.get("bankroll", 0)

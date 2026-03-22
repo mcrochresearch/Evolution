@@ -643,6 +643,37 @@ case "$CMD" in
         python3 "$ENGINE_DIR/wallet_poller.py" status
         ;;
 
+    # --- Trading: Sports Edge Calculator ---
+    sports-elo)
+        python3 "$ENGINE_DIR/sports_edge.py" elo "$@"
+        ;;
+    sports-devig)
+        python3 "$ENGINE_DIR/sports_edge.py" devig "$@"
+        ;;
+    sports-edge)
+        python3 "$ENGINE_DIR/sports_edge.py" edge "$@"
+        ;;
+    sports-evaluate)
+        python3 "$ENGINE_DIR/sports_edge.py" evaluate "$@"
+        ;;
+    sports-multi)
+        python3 "$ENGINE_DIR/sports_edge.py" multi-source "$@"
+        ;;
+
+    # --- Trading: Politics & Economics Edge ---
+    politics-polls)
+        python3 "$ENGINE_DIR/politics_edge.py" aggregate-polls "$@"
+        ;;
+    politics-evaluate)
+        python3 "$ENGINE_DIR/politics_edge.py" evaluate "$@"
+        ;;
+    politics-arb)
+        python3 "$ENGINE_DIR/politics_edge.py" structural-arb "$@"
+        ;;
+    politics-stale)
+        python3 "$ENGINE_DIR/politics_edge.py" stale-check "$@"
+        ;;
+
     # --- Trading: Position Management (phantom position killer) ---
     pos-open)
         python3 "$ENGINE_DIR/positions.py" open "$@"
@@ -742,6 +773,10 @@ case "$CMD" in
         echo "Wallets:     wallet-add | wallet-profile | wallet-signals | wallet-enrich"
         echo "             wallet-status | wallet-poll | wallet-poll-all"
         echo "             wallet-profile-live | wallet-discover | wallet-poller-status"
+        echo "Sports:      sports-elo | sports-devig | sports-edge | sports-evaluate"
+        echo "             sports-multi"
+        echo "Politics:    politics-polls | politics-evaluate | politics-arb"
+        echo "             politics-stale"
         echo "Weather:     weather-edge | weather-scan | weather-forecast"
         echo "             weather-fetch | weather-fetch-range | weather-evaluate"
         echo "             weather-cache-clear"
