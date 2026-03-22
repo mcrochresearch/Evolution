@@ -660,6 +660,23 @@ case "$CMD" in
         python3 "$ENGINE_DIR/sports_edge.py" multi-source "$@"
         ;;
 
+    # --- Trading: Sports Data Fetcher (ESPN + Odds API) ---
+    sports-espn)
+        python3 "$ENGINE_DIR/sports_fetcher.py" espn "$@"
+        ;;
+    sports-odds)
+        python3 "$ENGINE_DIR/sports_fetcher.py" odds "$@"
+        ;;
+    sports-fetch-evaluate)
+        python3 "$ENGINE_DIR/sports_fetcher.py" evaluate "$@"
+        ;;
+    sports-list)
+        python3 "$ENGINE_DIR/sports_fetcher.py" list-sports
+        ;;
+    sports-cache-clear)
+        python3 "$ENGINE_DIR/sports_fetcher.py" clear-cache "$@"
+        ;;
+
     # --- Trading: Politics & Economics Edge ---
     politics-polls)
         python3 "$ENGINE_DIR/politics_edge.py" aggregate-polls "$@"
@@ -774,7 +791,8 @@ case "$CMD" in
         echo "             wallet-status | wallet-poll | wallet-poll-all"
         echo "             wallet-profile-live | wallet-discover | wallet-poller-status"
         echo "Sports:      sports-elo | sports-devig | sports-edge | sports-evaluate"
-        echo "             sports-multi"
+        echo "             sports-multi | sports-espn | sports-odds"
+        echo "             sports-fetch-evaluate | sports-list | sports-cache-clear"
         echo "Politics:    politics-polls | politics-evaluate | politics-arb"
         echo "             politics-stale"
         echo "Weather:     weather-edge | weather-scan | weather-forecast"
