@@ -643,6 +643,32 @@ case "$CMD" in
         python3 "$ENGINE_DIR/wallet_poller.py" status
         ;;
 
+    # --- Trading: Position Management (phantom position killer) ---
+    pos-open)
+        python3 "$ENGINE_DIR/positions.py" open "$@"
+        ;;
+    pos-confirm)
+        python3 "$ENGINE_DIR/positions.py" confirm "$@"
+        ;;
+    pos-fail)
+        python3 "$ENGINE_DIR/positions.py" fail "$@"
+        ;;
+    pos-close)
+        python3 "$ENGINE_DIR/positions.py" close "$@"
+        ;;
+    pos-list)
+        python3 "$ENGINE_DIR/positions.py" list "$@"
+        ;;
+    pos-reconcile)
+        python3 "$ENGINE_DIR/positions.py" reconcile "$@"
+        ;;
+    pos-expire)
+        python3 "$ENGINE_DIR/positions.py" expire-stale "$@"
+        ;;
+    pos-status)
+        python3 "$ENGINE_DIR/positions.py" status
+        ;;
+
     # --- Trading: Full Pipeline (weather → enrich → kelly → risk gate) ---
     trade-evaluate)
         python3 "$ENGINE_DIR/trade_pipeline.py" evaluate "$@"
@@ -709,6 +735,8 @@ case "$CMD" in
         echo "             loop-configure | loop-status | loop-history"
         echo "Deploy:      deploy-threshold [value]"
         echo "Trading:     kelly-size | kelly-multi | kelly-simulate | kelly-portfolio"
+        echo "Positions:   pos-open | pos-confirm | pos-fail | pos-close | pos-list"
+        echo "             pos-reconcile | pos-expire | pos-status"
         echo "Risk:        risk-check | risk-drawdown | risk-can-trade | risk-status"
         echo "             risk-reset-daily | risk-record"
         echo "Wallets:     wallet-add | wallet-profile | wallet-signals | wallet-enrich"
