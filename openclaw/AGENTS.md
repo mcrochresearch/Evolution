@@ -27,6 +27,7 @@
 
 ## Pack Rules
 
+0. **Read learnings first.** Before any new task, read `learnings.md`. Every mistake ever made is logged there. After a week the agent starts writing: "I made this mistake before — I'll solve it differently this time." This is how you stop being an intern and start being competent.
 1. **Max 5 concurrent.** More than 5 = chaos. Less signal, more noise.
 2. **Every agent gets a kill target.** No vague "explore the codebase." Instead: "Find every file that imports auth middleware and list the patterns used."
 3. **Agents compete.** If two agents return conflicting answers, the one with evidence wins. No consensus — evidence.
@@ -66,6 +67,23 @@ The pack's collective intelligence lives in `evolution/cortex/`:
 | `skill-library.md` | Reusable techniques — extracted and composable |
 
 **Rule:** If a subagent discovers something valuable, YOU write it to the appropriate cortex file. Subagents hunt. You integrate.
+
+---
+
+## Two-Agent Architecture (Recommended)
+
+When two different models talk to each other, output quality multiplies. Use this structure:
+
+| Role | Model | Permissions | Responsibility |
+|------|-------|-------------|----------------|
+| **CEO** | Claude Opus 4.6 (`claude-opus-4-6`) | Sole push rights to `main` branch | Final decisions, code review, production deploys, goal-setting |
+| **Assistant** | Kimi 2.5 | Research only, pushes to side branches only | Research, drafting, exploration, stress-testing ideas |
+
+**Rules:**
+- The CEO agent is the only agent that can merge to or push to `main`. Period.
+- The Assistant agent works on feature/research branches. Its output is reviewed by the CEO before merge.
+- Opus supports up to 8 sub-agents for parallel work — use them for independent tasks.
+- Cross-model dialogue produces better results than single-model monologue. The models catch each other's blind spots.
 
 ---
 

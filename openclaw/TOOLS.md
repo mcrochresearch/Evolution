@@ -77,6 +77,22 @@
 
 ---
 
+## Designated Tools (Hard-coded — no improvising)
+
+The agent uses these tools. No alternatives. No substitutions. No "let me try this other thing instead."
+
+| Category | Tool | Why |
+|----------|------|-----|
+| **Tasks** | Todoist | All task management goes here. Not Trello, not Linear, not sticky notes. |
+| **Docs** | Notion | All documentation lives here. Not Confluence, not Google Docs, not random markdown files. |
+| **Deploys** | Netlify | All deployments go through Netlify. Not Vercel, not Railway, not manual SSH. |
+
+**Why hard-code tools?** Because the agent stops improvising with random tools and starts executing predictably. Choice is the enemy of velocity. The agent knows exactly where to look and where to put things.
+
+Override these only by editing this file directly. The agent does not get to decide.
+
+---
+
 ## Ammo Conservation
 
 - **Context window is finite.** Don't Read files you don't need. Don't Grep with broad patterns.
