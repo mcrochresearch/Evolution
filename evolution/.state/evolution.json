@@ -4,7 +4,7 @@
   "created": "2026-03-19T01:53:36.349236+00:00",
   "cycle": 4,
   "phase": "GENESIS",
-  "fitness": 0.0,
+  "fitness": 0.038,
   "fitness_history": [
     0.0,
     0.05,
@@ -42,9 +42,9 @@
       "name": "Content-Authority",
       "approach": "Build thought leadership content that attracts inbound leads",
       "hypothesis": "Inbound > outbound at scale",
-      "fitness": 0.0,
-      "attempts": 0,
-      "successes": 0,
+      "fitness": 0.045,
+      "attempts": 3,
+      "successes": 2,
       "generation": 1,
       "created": "2026-03-19T01:53:41.645504+00:00",
       "created_at_cycle": 0,
@@ -56,9 +56,9 @@
       "name": "Referral-Engine",
       "approach": "Turn every client into a referral machine with automated ask sequences",
       "hypothesis": "Lowest CAC channel",
-      "fitness": 0.0,
-      "attempts": 0,
-      "successes": 0,
+      "fitness": 0.038,
+      "attempts": 3,
+      "successes": 2,
       "generation": 1,
       "created": "2026-03-19T01:53:41.685794+00:00",
       "created_at_cycle": 0,
@@ -134,6 +134,28 @@
       "delta": -0.06,
       "kept": true,
       "timestamp": "2026-03-22T16:36:05.409703+00:00"
+    },
+    {
+      "cycle": 5,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.045,
+      "kept": true,
+      "timestamp": "2026-03-23T19:32:56.979811Z"
+    },
+    {
+      "cycle": 6,
+      "strategy": "S003",
+      "action": "Tested Referral-Engine: 0.038 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": -0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-23T19:33:05.279166Z"
     }
   ],
   "principles": [],
@@ -169,12 +191,28 @@
       "fitness": 0.0,
       "surprise": false,
       "timestamp": "2026-03-22T16:36:05.419705+00:00"
+    },
+    {
+      "cycle": 5,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-23T19:32:56.980758Z"
+    },
+    {
+      "cycle": 6,
+      "action": "Tested Referral-Engine",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-23T19:33:05.279824Z"
     }
   ],
   "sub_goals": [],
   "success_criteria": [],
   "cumulative_regret": 0.0,
   "max_cycles": 200,
-  "_loop_step": "SELECT",
+  "_loop_step": "EXECUTE",
   "_last_selected": "S004"
 }
