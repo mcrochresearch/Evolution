@@ -736,6 +736,14 @@ case "$CMD" in
         python3 "$ENGINE_DIR/harness.py" "$@"
         ;;
 
+    # --- Benchmark Engine ---
+    benchmark)
+        python3 "$ENGINE_DIR/benchmark.py" "$@"
+        ;;
+    bench)
+        python3 "$ENGINE_DIR/benchmark.py" "$@"
+        ;;
+
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -801,6 +809,9 @@ case "$CMD" in
         echo "Pipeline:    trade-evaluate | trade-execute | trade-status | trade-history"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
         echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
+        echo "Benchmark:   benchmark define <name> <desc> <criteria> | benchmark list | benchmark run <name>"
+        echo "             benchmark record <name> <mode> <cycles> <fitness> <data> | benchmark compare <name>"
+        echo "             benchmark report | benchmark evidence | benchmark autonomy"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
