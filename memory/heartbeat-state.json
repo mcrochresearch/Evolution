@@ -1,10 +1,10 @@
 {
   "lastRun": {
-    "health": "2026-03-22",
-    "leads": "2026-03-22",
+    "health": "2026-03-23",
+    "leads": "2026-03-23",
     "competitive": "2026-03-22",
-    "outreach": "2026-03-22",
-    "improvement": "2026-03-22"
+    "outreach": "2026-03-23",
+    "improvement": "2026-03-23"
   },
-  "notes": "2026-03-22 04:30: Block A complete. localcomm build CLEAN, lint CLEAN. OLMx both endpoints UP. 458 leads queued. SINGLE BLOCKER: email creds. Fastest fix: get a Resend.com API key (free, 30 sec). SMTP fallback: Gmail app password at myaccount.google.com/apppasswords. Command: SMTP_USER=pat@gmail.com SMTP_PASS='xxxx xxxx' python3 memory/outreach/send_all_outreach.py"
+  "notes": "2026-03-23 02:41: Block D: rewrote weak CTAs across dental/gym/law outreach files — all now use specific day/time ask, all signed Pat McKenna (was Shelly). Block E: built send_resend.py — Resend API sender, bypasses M365 entirely. resend package already installed. 7 emails queued, dry run clean. UNBLOCKED pending one API key from resend.com (free tier). Send order: Prisco P1 → HVAC P2 → Roofing/Plumbing/CPA P3-4."
 }

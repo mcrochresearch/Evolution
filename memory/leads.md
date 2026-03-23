@@ -64,3 +64,21 @@ Note: Dental search returned 0 results (SearXNG engines suspended). Not adding d
 ## CPA/Accounting — Stamford CT (added 2026-03-21, URLs verified 200)
 - **Angliss & Colohan, P.C.** — anglisscolohanpc.com — CPA firm, 50 Woodbury Ave, Stamford CT, 13 years. A+ BBB. Owner: Michael T. Colohan (President). Phone: 203-357-1040. Email: info@anglisscolohanpc.com. Services: business tax prep, bookkeeping, accounting software training, estate planning. Source: BBB
 - **Bernadel Consultants & Advisors LLC** — bernadelconsultants.com — CPA/Tax, 355 Atlantic St, Stamford CT. A+ BBB. Phone: (203) 912-4929. Email: jhumyb@gmail.com (gmail — small op, owner-operated). Services: tax prep, tax consulting. Source: BBB
+
+## Roofing — Stamford CT (added 2026-03-22 10:06, URLs verified)
+- **Casanova Remodeling** — casanovaremodeling.com — Roofing + remodeling contractor, Stamford CT. Active site (200). Source: SearXNG
+- **Brown Roofing Company** — brownroofing.org — Local roofing, gutter install, Stamford CT. Active (301→200). Source: SearXNG
+- **Signature Exteriors** — signatureexteriors.com — Leading Roofing & Siding Co, Stamford CT. Phone: 866-244-8029. Active (301→200). Source: SearXNG
+
+## Landscaping — Stamford CT (added 2026-03-22 10:06, URLs verified)
+- **Sullivan & Son Land Management** — sullivanandsonlm.com — 30+ years transforming Stamford landscapes. Phone: 203-461-0604. Active (301→200). Source: SearXNG
+- **Davida Landscape Designs** — davidalandscapedesigns.com — Landscape design + build, Stamford CT. Active (301→200). Source: SearXNG
+- **Rosado Landscaping & Design LLC** — rosadolandscaping.com — Native landscape design, Stamford CT. Active (301→200). Source: SearXNG
+- **Gerbert & Sons Landscaping & Irrigation** — gerbertandsons.com — Full-range landscaping + irrigation, Stamford CT. Active (200). Source: SearXNG
+
+## Veterinary — Stamford CT (added 2026-03-23, URLs verified 200)
+- **Stamford Veterinary Center & My Pet Lodge** — stamfordvetcenter.com — Full-service vet + pet boarding in Springdale/Stamford. "Free first exam" offer active (suggests client acquisition focus). Running online store. Address not confirmed on homepage. Source: SearXNG + site fetch
+- **High Ridge Animal Hospital** — highridgeanimalhosp.com — Full-service animal hospital, 868 High Ridge Rd, Stamford CT 06905. Phone: (203) 322-0507. Dogs + cats, wellness/surgery/diagnostics. Has PetDesk mobile app + online booking — digitally aware practice. Source: SearXNG + site fetch
+
+## Auto Repair — Stamford CT (enriched 2026-03-23, phone/email added)
+- **Stamford Auto Repair** — stamfordautorepair.com — 859 East Main St, Stamford CT 06902. Phone: (203) 504-8096. ASE Blue Seal of Excellence. "Voted Best Auto Repair Shop in Stamford/CT." Owner contact via Silvia (front desk). Source: site fetch

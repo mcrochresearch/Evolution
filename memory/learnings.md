@@ -20,6 +20,12 @@ Read this before every new task. If you've made this mistake before, solve it di
 **Fix:** ALWAYS wrap curl URLs in single quotes. `curl -s 'http://localhost:3100/api/...'`
 **Rule added:** SOUL.md CHEAT SHEET — Rule 4.
 
+### [2026-03-22] Misreporting lead pipeline state — wrong DB, wrong count
+**What happened:** Reported MEMORY.md's stale "50 target" number without checking the actual source. Then reported 3,712 total without checking WHERE they're stuck.
+**The real state:** ~/.localcrm/database.db is the canonical lead DB. 3,712 contacts. 3,689 stuck at `new` stage. 1,094 have emails and have never been touched. This is the bottleneck.
+**Fix:** Always query `~/.localcrm/database.db` first. Always check stage distribution. The stuck-at-`new` count is the most important operational metric.
+**Rule:** Before reporting any lead numbers, run: `sqlite3 ~/.localcrm/database.db "SELECT stage, COUNT(*) FROM contacts GROUP BY stage ORDER BY COUNT(*) DESC;"`
+
 ### [2026-03-22] Asking Pat questions instead of deciding
 **What happened:** Agent presented options ("Should I do X or Y?") instead of picking and executing.
 **Fix:** Pick highest expected value. Execute. Report which you picked and why.
