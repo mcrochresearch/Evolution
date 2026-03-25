@@ -946,6 +946,100 @@ def cmd_crystallize():
     }))
 
 
+def cmd_test(strategy_id: str, strategy_type: str = "S002"):
+    """Test a strategy by running the test_strategies.py script.
+    
+    This command actually executes the strategy testing and returns
+    the results for use with cmd_cycle.
+    """
+    import subprocess
+    import os
+    import re
+    
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)
+    test_script = os.path.join(repo_root, "evolution", ".state", "test_strategies.py")
+    
+    # Check if test script exists
+    if not os.path.exists(test_script):
+        print(json.dumps({"error": f"Test script not found: {test_script}"}))
+        sys.exit(1)
+    
+    # Run the test script with correct arguments
+    try:
+        result = subprocess.run(
+            ["python3", test_script, "--cycle", "1", "--strategy", strategy_type],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            print(json.dumps({
+                "error": "Test execution failed",
+                "stderr": result.stderr,
+                "stdout": result.stdout
+            }))
+            sys.exit(1)
+        
+        # Parse the test results - test_strategies.py outputs JSON with test results
+        try:
+            test_results = json.loads(result.stdout)
+            
+            # Extract test metrics from the test results
+            # The test_strategies.py outputs fitness, passing, total_tests
+            tests_total = test_results.get("total_tests", 0)
+            tests_passing = test_results.get("passing", 0)
+            fitness = test_results.get("fitness", 0.0)
+            
+            # If the test results don't have these fields, try to parse them from the output
+            if tests_total == 0 and "tests_total" in test_results:
+                tests_total = test_results["tests_total"]
+            if tests_passing == 0 and "tests_passing" in test_results:
+                tests_passing = test_results["tests_passing"]
+            if fitness == 0.0 and "fitness" in test_results:
+                fitness = test_results["fitness"]
+            
+            print(json.dumps({
+                "status": "tested",
+                "strategy_id": strategy_id,
+                "strategy_type": strategy_type,
+                "tests_total": tests_total,
+                "tests_passing": tests_passing,
+                "fitness": fitness,
+                "raw_results": test_results
+            }))
+        except json.JSONDecodeError:
+            # Try to extract metrics from the output text
+            output = result.stdout
+            tests_total_match = re.search(r'tests_total[:\s]+(\d+)', output)
+            tests_passing_match = re.search(r'tests_passing[:\s]+(\d+)', output)
+            fitness_match = re.search(r'fitness[:\s]+([\d.]+)', output)
+            
+            tests_total = int(tests_total_match.group(1)) if tests_total_match else 0
+            tests_passing = int(tests_passing_match.group(1)) if tests_passing_match else 0
+            fitness = float(fitness_match.group(1)) if fitness_match else 0.0
+            
+            print(json.dumps({
+                "status": "tested",
+                "strategy_id": strategy_id,
+                "strategy_type": strategy_type,
+                "tests_total": tests_total,
+                "tests_passing": tests_passing,
+                "fitness": fitness,
+                "raw_results": {"output": output}
+            }))
+            
+    except subprocess.TimeoutExpired:
+        print(json.dumps({"error": "Test execution timed out after 60 seconds"}))
+        sys.exit(1)
+    except Exception as e:
+        print(json.dumps({"error": f"Test execution failed: {str(e)}"}))
+        sys.exit(1)
+
+
 def cmd_next():
     """Engine-driven guided mode: tells the model exactly what to do next.
 
@@ -1361,6 +1455,11 @@ def main():
             cmd_export()
         elif cmd == "import":
             cmd_import()
+        elif cmd == "test":
+            if len(sys.argv) < 4:
+                print(json.dumps({"error": "Usage: test <strategy_id> <strategy_type>"}))
+                sys.exit(1)
+            cmd_test(sys.argv[2], sys.argv[3])
         else:
             print(json.dumps({"error": f"Unknown command: {cmd}"}))
             sys.exit(1)

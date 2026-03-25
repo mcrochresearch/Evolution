@@ -2,20 +2,22 @@
   "version": 3,
   "goal": "Become the best SMB marketing agency in the world",
   "created": "2026-03-19T01:53:36.349236+00:00",
-  "cycle": 4,
-  "phase": "GENESIS",
-  "fitness": 0.045,
+  "cycle": 6,
+  "phase": "GROWTH",
+  "fitness": 0.038,
   "fitness_history": [
     0.0,
     0.05,
     0.06,
-    0.0
+    0.0,
+    0.045,
+    0.038
   ],
   "consecutive_failures": 0,
-  "consecutive_successes": 3,
+  "consecutive_successes": 5,
   "next_strategy_id": 5,
-  "_phase_pending": "GROWTH",
-  "_phase_pending_count": 1,
+  "_phase_pending": null,
+  "_phase_pending_count": 0,
   "strategies": [
     {
       "id": "S001",
@@ -43,13 +45,19 @@
       "approach": "Build thought leadership content that attracts inbound leads",
       "hypothesis": "Inbound > outbound at scale",
       "fitness": 0.045,
-      "attempts": 3,
-      "successes": 2,
+      "attempts": 4,
+      "successes": 3,
       "generation": 1,
       "created": "2026-03-19T01:53:41.645504+00:00",
       "created_at_cycle": 0,
       "parents": [],
-      "status": "CANDIDATE"
+      "status": "CANDIDATE",
+      "context_stats": {
+        "low": {
+          "attempts": 1,
+          "successes": 1
+        }
+      }
     },
     {
       "id": "S003",
@@ -57,13 +65,19 @@
       "approach": "Turn every client into a referral machine with automated ask sequences",
       "hypothesis": "Lowest CAC channel",
       "fitness": 0.038,
-      "attempts": 3,
-      "successes": 2,
+      "attempts": 4,
+      "successes": 3,
       "generation": 1,
       "created": "2026-03-19T01:53:41.685794+00:00",
       "created_at_cycle": 0,
       "parents": [],
-      "status": "CANDIDATE"
+      "status": "CANDIDATE",
+      "context_stats": {
+        "low": {
+          "attempts": 1,
+          "successes": 1
+        }
+      }
     },
     {
       "id": "S004",
@@ -189,6 +203,72 @@
       "delta": 0.006999999999999999,
       "kept": true,
       "timestamp": "2026-03-25T11:23:17.061268Z"
+    },
+    {
+      "cycle": 10,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.0,
+      "kept": true,
+      "timestamp": "2026-03-25T11:23:35.701490Z"
+    },
+    {
+      "cycle": 10,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.0,
+      "kept": true,
+      "timestamp": "2026-03-25T11:23:52.610839Z"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.0,
+      "kept": true,
+      "timestamp": "2026-03-25T11:58:07.297353Z"
+    },
+    {
+      "cycle": 5,
+      "strategy": "S002",
+      "action": "test",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.0,
+      "kept": true,
+      "timestamp": "2026-03-25T11:58:16.664836+00:00"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S003",
+      "action": "Tested Referral-Engine: 0.038 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": -0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-25T11:58:26.487334Z"
+    },
+    {
+      "cycle": 6,
+      "strategy": "S003",
+      "action": "test",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": 0.0,
+      "kept": true,
+      "timestamp": "2026-03-25T11:58:36.459414+00:00"
     }
   ],
   "principles": [],
@@ -264,11 +344,59 @@
       "fitness": 0.045,
       "surprise": false,
       "timestamp": "2026-03-25T11:23:17.061914Z"
+    },
+    {
+      "cycle": 10,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:23:35.701859Z"
+    },
+    {
+      "cycle": 10,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:23:52.611408Z"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:58:07.302564Z"
+    },
+    {
+      "cycle": 5,
+      "action": "test",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:58:16.665644+00:00"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Referral-Engine",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:58:26.488656Z"
+    },
+    {
+      "cycle": 6,
+      "action": "test",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-25T11:58:36.461713+00:00"
     }
   ],
   "sub_goals": [],
   "success_criteria": [],
-  "cumulative_regret": 0.0,
+  "cumulative_regret": 0.6666,
   "max_cycles": 200,
   "_loop_step": "EXECUTE",
   "_last_selected": "S004"
