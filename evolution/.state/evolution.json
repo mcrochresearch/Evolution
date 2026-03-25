@@ -1,0 +1,256 @@
+{
+  "version": 3,
+  "goal": "Become the best SMB marketing agency in the world",
+  "created": "2026-03-19T01:53:36.349236+00:00",
+  "cycle": 4,
+  "phase": "GENESIS",
+  "fitness": 0.038,
+  "fitness_history": [
+    0.0,
+    0.05,
+    0.06,
+    0.0
+  ],
+  "consecutive_failures": 0,
+  "consecutive_successes": 3,
+  "next_strategy_id": 5,
+  "_phase_pending": "GROWTH",
+  "_phase_pending_count": 1,
+  "strategies": [
+    {
+      "id": "S001",
+      "name": "Outreach-Blitz",
+      "approach": "Maximize personalized cold outreach volume to SMBs with high pain scores",
+      "hypothesis": "Volume \u00d7 relevance = pipeline",
+      "fitness": 0.0367,
+      "attempts": 3,
+      "successes": 2,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.597520+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE",
+      "context_stats": {
+        "low": {
+          "attempts": 3,
+          "successes": 2
+        }
+      }
+    },
+    {
+      "id": "S002",
+      "name": "Content-Authority",
+      "approach": "Build thought leadership content that attracts inbound leads",
+      "hypothesis": "Inbound > outbound at scale",
+      "fitness": 0.045,
+      "attempts": 3,
+      "successes": 2,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.645504+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE"
+    },
+    {
+      "id": "S003",
+      "name": "Referral-Engine",
+      "approach": "Turn every client into a referral machine with automated ask sequences",
+      "hypothesis": "Lowest CAC channel",
+      "fitness": 0.038,
+      "attempts": 3,
+      "successes": 2,
+      "generation": 1,
+      "created": "2026-03-19T01:53:41.685794+00:00",
+      "created_at_cycle": 0,
+      "parents": [],
+      "status": "CANDIDATE"
+    },
+    {
+      "id": "S004",
+      "name": "Outreach-Blitz-Plus",
+      "approach": "Outreach-Blitz with hyper-personalization: analyze target's Google reviews before drafting, reference specific customer complaints as pain points",
+      "hypothesis": "Mutation of S001: Outreach-Blitz",
+      "fitness": 0.0,
+      "attempts": 1,
+      "successes": 1,
+      "generation": 2,
+      "created": "2026-03-22T16:35:37.299019+00:00",
+      "created_at_cycle": 3,
+      "parents": [
+        "S001"
+      ],
+      "status": "CANDIDATE",
+      "context_stats": {
+        "low": {
+          "attempts": 1,
+          "successes": 1
+        }
+      }
+    }
+  ],
+  "graveyard": [],
+  "hall_of_fame": [],
+  "cycles": [
+    {
+      "cycle": 1,
+      "strategy": "S001",
+      "action": "Outreach-Blitz selected. SearXNG 0 results \u2014 engines misconfigured. Checked pipeline state.",
+      "tests_passing": 0,
+      "tests_total": 1,
+      "fitness": 0.0,
+      "delta": 0.0,
+      "kept": false,
+      "timestamp": "2026-03-19T01:54:56.799505+00:00"
+    },
+    {
+      "cycle": 2,
+      "strategy": "S001",
+      "action": "Built consolidated outreach script (7 emails ready), fixed all placeholders, dry-run verified. Blocked on SMTP creds \u2014 zero sent.",
+      "tests_passing": 0,
+      "tests_total": 1,
+      "fitness": 0.05,
+      "delta": 0.05,
+      "kept": true,
+      "timestamp": "2026-03-22T11:59:05.818595+00:00"
+    },
+    {
+      "cycle": 3,
+      "strategy": "S001",
+      "action": "LinkedIn DM templates drafted for 5 priority targets. SMTP-free outreach channel unblocked.",
+      "tests_passing": 1,
+      "tests_total": 1,
+      "fitness": 0.06,
+      "delta": 0.01,
+      "kept": true,
+      "timestamp": "2026-03-22T15:30:21.067729+00:00"
+    },
+    {
+      "cycle": 4,
+      "strategy": "S004",
+      "action": "Mutated Outreach-Blitz to Outreach-Blitz-Plus with review-based personalization",
+      "tests_passing": 0,
+      "tests_total": 1,
+      "fitness": 0.0,
+      "delta": -0.06,
+      "kept": true,
+      "timestamp": "2026-03-22T16:36:05.409703+00:00"
+    },
+    {
+      "cycle": 5,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.045,
+      "kept": true,
+      "timestamp": "2026-03-23T19:32:56.979811Z"
+    },
+    {
+      "cycle": 6,
+      "strategy": "S003",
+      "action": "Tested Referral-Engine: 0.038 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": -0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-23T19:33:05.279166Z"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-25T09:06:21.450556Z"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S003",
+      "action": "Tested Referral-Engine: 0.038 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": -0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-25T09:06:23.117582Z"
+    }
+  ],
+  "principles": [],
+  "episodes": [
+    {
+      "cycle": 1,
+      "action": "Outreach-Blitz selected. SearXNG 0 results \u2014 engines misconfigured. Checked pipeline state.",
+      "outcome": "REVERTED",
+      "fitness": 0.0,
+      "surprise": false,
+      "timestamp": "2026-03-19T01:54:56.799662+00:00"
+    },
+    {
+      "cycle": 2,
+      "action": "Built consolidated outreach script (7 emails ready), fixed all placeholders, dry-run verified. Blocked on SMTP creds \u2014 zero sent.",
+      "outcome": "KEPT",
+      "fitness": 0.05,
+      "surprise": false,
+      "timestamp": "2026-03-22T11:59:05.818825+00:00"
+    },
+    {
+      "cycle": 3,
+      "action": "LinkedIn DM templates drafted for 5 priority targets. SMTP-free outreach channel unblocked.",
+      "outcome": "KEPT",
+      "fitness": 0.06,
+      "surprise": false,
+      "timestamp": "2026-03-22T15:30:21.068205+00:00"
+    },
+    {
+      "cycle": 4,
+      "action": "Mutated Outreach-Blitz to Outreach-Blitz-Plus with review-based personalization",
+      "outcome": "KEPT",
+      "fitness": 0.0,
+      "surprise": false,
+      "timestamp": "2026-03-22T16:36:05.419705+00:00"
+    },
+    {
+      "cycle": 5,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-23T19:32:56.980758Z"
+    },
+    {
+      "cycle": 6,
+      "action": "Tested Referral-Engine",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-23T19:33:05.279824Z"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T09:06:21.451254Z"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Referral-Engine",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-25T09:06:23.118182Z"
+    }
+  ],
+  "sub_goals": [],
+  "success_criteria": [],
+  "cumulative_regret": 0.0,
+  "max_cycles": 200,
+  "_loop_step": "EXECUTE",
+  "_last_selected": "S004"
+}

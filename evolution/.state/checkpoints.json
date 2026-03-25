@@ -1,0 +1,12 @@
+{
+  "checkpoints": [
+    {
+      "number": 1,
+      "ref": "refs/evolution/checkpoint-1",
+      "commit": "c5047d5ee64a21b3f4b5d9b68459ed8cceb9d1cb",
+      "head": "0534cea4cadf810a0c73592195997c5c3743feec",
+      "message": "Outreach infrastructure complete. 7 emails ready, all placeholders fixed. Blocked on SMTP \u2014 need Gmail app password or Resend API key from Pat.",
+      "timestamp": "2026-03-22T11:59:10Z"
+    }
+  ]
+}

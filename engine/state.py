@@ -103,7 +103,7 @@ MAX_HISTORY = 500                   # Rolling window for fitness_history, cycles
 def default_state(goal: str) -> dict:
     """Create a fresh evolution state."""
     return {
-        "version": 4,
+        "version": 3,
         "goal": goal,
         "created": now(),
         "cycle": 0,
@@ -125,18 +125,6 @@ def default_state(goal: str) -> dict:
         "success_criteria": [],
         "cumulative_regret": 0.0,
         "max_cycles": MAX_CYCLES_DEFAULT,
-        "deploy_threshold": 0.80,
-        "pipeline_dag": None,
-        "trading": {
-            "enabled": False,
-            "bankroll": 0.0,
-            "peak_bankroll": 0.0,
-            "total_pnl": 0.0,
-            "total_trades": 0,
-            "winning_trades": 0,
-            "open_positions": [],
-            "trade_log": [],
-        },
     }
 
 
@@ -159,7 +147,7 @@ def _release_lock(lock_fd):
     lock_fd.close()
 
 
-CURRENT_STATE_VERSION = 4
+CURRENT_STATE_VERSION = 3
 
 
 def _migrate_state(state: dict) -> dict:
@@ -194,21 +182,6 @@ def _migrate_state(state: dict) -> dict:
                     s["parents"] = [old]
         state["version"] = 3
         version = 3
-
-    if version < 4:
-        # v4: Trading infrastructure fields
-        state.setdefault("trading", {
-            "enabled": False,
-            "bankroll": 0.0,
-            "peak_bankroll": 0.0,
-            "total_pnl": 0.0,
-            "total_trades": 0,
-            "winning_trades": 0,
-            "open_positions": [],
-            "trade_log": [],
-        })
-        state["version"] = 4
-        version = 4
 
     return state
 
@@ -361,40 +334,12 @@ def safe_float(val: str, name: str) -> float:
 # COMMANDS
 # ============================================================================
 
-def cmd_init(goal: str, goal_type: str = "code"):
-    """Initialize a new evolution.
-
-    Args:
-        goal: The goal to pursue.
-        goal_type: "code" (default) or "business". Affects suggested strategies.
-    """
+def cmd_init(goal: str):
+    """Initialize a new evolution."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     state = default_state(goal)
-    state["goal_type"] = goal_type
     save_state(state)
-
-    # Suggest starter strategies based on goal type
-    if goal_type == "business":
-        suggestions = [
-            {"name": "Market-First", "approach": "Research market, validate demand, build MVP for real users", "hypothesis": "Validated demand reduces wasted effort"},
-            {"name": "Revenue-Sprint", "approach": "Ship the smallest thing that can generate revenue, iterate from customer feedback", "hypothesis": "Revenue is the ultimate fitness signal"},
-            {"name": "Network-Leverage", "approach": "Find existing platforms/communities, build on top of them for distribution", "hypothesis": "Distribution beats product in early stages"},
-        ]
-    else:
-        suggestions = [
-            {"name": "Direct", "approach": "Build it straightforwardly, component by component", "hypothesis": "Speed wins"},
-            {"name": "Test-First", "approach": "Write tests defining expected behavior, then implement", "hypothesis": "TDD catches bugs early"},
-            {"name": "Research-Adapt", "approach": "Find similar solved problems, adapt their solutions", "hypothesis": "Don't reinvent wheels"},
-        ]
-
-    print(json.dumps({
-        "status": "initialized",
-        "goal": goal,
-        "goal_type": goal_type,
-        "suggested_strategies": suggestions,
-        "note": f"Add strategies with: ./engine/evolve add-strategy \"Name\" \"Approach\" \"Hypothesis\""
-              + (f"\nFor business goals, use: ./engine/evolve fitness --manual <score> \"description\"" if goal_type == "business" else ""),
-    }))
+    print(json.dumps({"status": "initialized", "goal": goal}))
 
 
 def _next_sid(state: dict) -> str:
@@ -1269,37 +1214,6 @@ def cmd_status():
         "cumulative_regret": round(state.get("cumulative_regret", 0.0), 4),
         "avg_regret_per_cycle": round(state.get("cumulative_regret", 0.0) / max(total_cycles, 1), 4),
     }
-
-    # Include trading dashboard when trading is enabled
-    trading = state.get("trading", {})
-    if trading.get("enabled"):
-        bankroll = trading.get("bankroll", 0)
-        peak = trading.get("peak_bankroll", 0)
-        total_trades = trading.get("total_trades", 0)
-        winning = trading.get("winning_trades", 0)
-        drawdown_pct = round((peak - bankroll) / peak * 100, 2) if peak > 0 else 0
-
-        dashboard["trading"] = {
-            "bankroll": round(bankroll, 2),
-            "peak_bankroll": round(peak, 2),
-            "total_pnl": round(trading.get("total_pnl", 0), 2),
-            "drawdown_pct": drawdown_pct,
-            "total_trades": total_trades,
-            "win_rate": round(winning / total_trades, 3) if total_trades > 0 else 0,
-            "open_positions": len(trading.get("open_positions", [])),
-        }
-
-        # Import risk dashboard if available
-        try:
-            from engine.risk import get_risk_dashboard
-            risk_dash = get_risk_dashboard(bankroll, trading.get("open_positions", []))
-            dashboard["trading"]["halted"] = risk_dash.get("halted", False)
-            dashboard["trading"]["halt_reason"] = risk_dash.get("halt_reason")
-            dashboard["trading"]["daily_pnl"] = risk_dash.get("daily_pnl", 0)
-            dashboard["trading"]["can_trade"] = risk_dash.get("can_trade", True)
-        except ImportError:
-            pass
-
     print(json.dumps(dashboard, indent=2))
 
 
@@ -1381,17 +1295,9 @@ def main():
     try:
         if cmd == "init":
             if len(sys.argv) < 3 or not sys.argv[2].strip():
-                print(json.dumps({"error": "Usage: init <goal> [--type code|business]. A goal is required."}))
+                print(json.dumps({"error": "Usage: init <goal>. A goal is required."}))
                 sys.exit(1)
-            goal_type = "code"
-            if "--type" in sys.argv:
-                type_idx = sys.argv.index("--type")
-                if type_idx + 1 < len(sys.argv):
-                    goal_type = sys.argv[type_idx + 1]
-                    if goal_type not in ("code", "business"):
-                        print(json.dumps({"error": f"Unknown goal type: {goal_type}. Use 'code' or 'business'."}))
-                        sys.exit(1)
-            cmd_init(sys.argv[2], goal_type)
+            cmd_init(sys.argv[2])
         elif cmd == "add-strategy":
             if len(sys.argv) < 4:
                 print(json.dumps({"error": "Usage: add-strategy <name> <approach> [hypothesis]"}))
@@ -1449,66 +1355,6 @@ def main():
         elif cmd == "fitness":
             state = load_state()
             print(json.dumps({"fitness": state["fitness"], "history": state["fitness_history"][-20:]}))
-        elif cmd == "deploy-threshold":
-            if len(sys.argv) < 3:
-                state = load_state()
-                print(json.dumps({"deploy_threshold": state.get("deploy_threshold", 0.80)}))
-            else:
-                threshold = safe_float(sys.argv[2], "threshold")
-                if not (0.0 <= threshold <= 1.0):
-                    print(json.dumps({"error": "Threshold must be between 0.0 and 1.0"}))
-                    sys.exit(1)
-                with locked_state() as state:
-                    state["deploy_threshold"] = threshold
-                print(json.dumps({"status": "threshold_set", "deploy_threshold": threshold}))
-        elif cmd == "trading-init":
-            # Initialize trading mode with a bankroll
-            if len(sys.argv) < 3:
-                print(json.dumps({"error": "Usage: trading-init <bankroll_usd>"}))
-                sys.exit(1)
-            bankroll = safe_float(sys.argv[2], "bankroll")
-            with locked_state() as state:
-                state.setdefault("trading", {})
-                state["trading"]["enabled"] = True
-                state["trading"]["bankroll"] = bankroll
-                state["trading"]["peak_bankroll"] = max(bankroll, state["trading"].get("peak_bankroll", 0))
-            print(json.dumps({"status": "trading_enabled", "bankroll": bankroll}))
-        elif cmd == "trading-record":
-            # Record a trade result: trading-record <win|loss> <pnl_usd> [market_id]
-            if len(sys.argv) < 4:
-                print(json.dumps({"error": "Usage: trading-record <win|loss> <pnl_usd> [market_id]"}))
-                sys.exit(1)
-            win = sys.argv[2].lower() == "win"
-            pnl = safe_float(sys.argv[3], "pnl")
-            market_id = sys.argv[4] if len(sys.argv) > 4 else ""
-            with locked_state() as state:
-                trading = state.setdefault("trading", {})
-                trading["total_trades"] = trading.get("total_trades", 0) + 1
-                trading["total_pnl"] = round(trading.get("total_pnl", 0) + pnl, 2)
-                trading["bankroll"] = round(trading.get("bankroll", 0) + pnl, 2)
-                if win:
-                    trading["winning_trades"] = trading.get("winning_trades", 0) + 1
-                if trading["bankroll"] > trading.get("peak_bankroll", 0):
-                    trading["peak_bankroll"] = trading["bankroll"]
-                trading.setdefault("trade_log", [])
-                trading["trade_log"].append({
-                    "win": win, "pnl": pnl, "market_id": market_id,
-                    "bankroll_after": trading["bankroll"], "timestamp": now(),
-                })
-                trading["trade_log"] = trading["trade_log"][-200:]
-            # Also update risk state
-            try:
-                from engine.risk import record_trade_result
-                record_trade_result(win, pnl)
-            except ImportError:
-                try:
-                    sys.path.insert(0, str(Path(__file__).resolve().parent))
-                    from risk import record_trade_result
-                    record_trade_result(win, pnl)
-                except ImportError:
-                    pass
-            print(json.dumps({"status": "recorded", "win": win, "pnl": pnl,
-                              "bankroll": trading["bankroll"]}))
         elif cmd == "reset":
             cmd_reset(force="--force" in sys.argv)
         elif cmd == "export":

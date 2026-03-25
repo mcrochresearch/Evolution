@@ -19,53 +19,6 @@
 
 set -euo pipefail
 
-# --- Manual fitness mode for non-code goals ---
-# Usage: ./engine/fitness.sh --manual <score> [description]
-# Score: 0.0 to 1.0
-# Example: ./engine/fitness.sh --manual 0.6 "Landed 3 new leads, MRR up 5%"
-if [[ "${1:-}" == "--manual" ]]; then
-    SCORE="${2:-}"
-    DESC="${3:-manual assessment}"
-    if [[ -z "$SCORE" ]]; then
-        echo '{"error":"Usage: fitness.sh --manual <score> [description]. Score must be 0.0-1.0"}' >&2
-        exit 1
-    fi
-    # Validate score range
-    VALID=$(python3 -c "
-s = float('$SCORE')
-if 0.0 <= s <= 1.0:
-    print('ok')
-else:
-    print('bad')
-" 2>/dev/null || echo "bad")
-    if [[ "$VALID" != "ok" ]]; then
-        echo "{\"error\":\"Score must be between 0.0 and 1.0, got: $SCORE\"}" >&2
-        exit 1
-    fi
-    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    python3 -c "
-import json
-print(json.dumps({
-    'fitness': float('$SCORE'),
-    'mode': 'manual',
-    'description': '$DESC',
-    'tests_passing': 0,
-    'tests_total': 0,
-    'test_count_confidence': 0.0,
-    'build': False,
-    'lint': False,
-    'types': False,
-    'project_type': 'manual',
-    'checks': [{'name': 'manual', 'passed': float('$SCORE') >= 0.5, 'score': float('$SCORE'), 'weight': 1.0, 'detail': '$DESC'}],
-    'errors': [],
-    'timeout_sec': 0,
-    'environment': {},
-    'timestamp': '$TIMESTAMP'
-}, indent=2))
-"
-    exit 0
-fi
-
 PROJECT_DIR="${1:-.}"
 cd "$PROJECT_DIR"
 

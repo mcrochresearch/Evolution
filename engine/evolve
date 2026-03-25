@@ -31,25 +31,6 @@
 set -euo pipefail
 
 ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# --- Python version check ---
-check_python() {
-    if ! command -v python3 &>/dev/null; then
-        echo '{"error":"Python 3 is not installed. Evolution requires Python 3.7+. Install it and try again."}' >&2
-        exit 1
-    fi
-    local ver
-    ver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
-    local major minor
-    major=$(echo "$ver" | cut -d. -f1)
-    minor=$(echo "$ver" | cut -d. -f2)
-    if [[ "$major" -lt 3 ]] || { [[ "$major" -eq 3 ]] && [[ "$minor" -lt 7 ]]; }; then
-        echo "{\"error\":\"Python $ver found but Evolution requires Python 3.7+. Please upgrade.\"}" >&2
-        exit 1
-    fi
-}
-check_python
-
 CMD="${1:-help}"
 shift || true
 
@@ -63,7 +44,6 @@ case "$CMD" in
         ;;
 
     # --- State Management ---
-    # Usage: ./engine/evolve init "goal" [--type code|business]
     init)
         python3 "$ENGINE_DIR/state.py" init "$@"
         ;;
@@ -109,11 +89,7 @@ case "$CMD" in
 
     # --- Fitness ---
     fitness)
-        if [[ "${1:-}" == "--manual" ]]; then
-            bash "$ENGINE_DIR/fitness.sh" --manual "${@:2}"
-        else
-            bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
-        fi
+        bash "$ENGINE_DIR/fitness.sh" "${1:-.}"
         ;;
 
     # --- Checkpoints ---
@@ -345,403 +321,15 @@ case "$CMD" in
     dna-revert)
         python3 "$ENGINE_DIR/mutate_dna.py" revert
         ;;
-    gradient-mutate)
-        python3 "$ENGINE_DIR/mutate_dna.py" gradient-mutate
-        ;;
-    breed-express)
-        python3 "$ENGINE_DIR/mutate_dna.py" breed-express
-        ;;
-
-    # --- Language Gradients (Backward Attribution) ---
-    gradient-record)
-        python3 "$ENGINE_DIR/language_gradients.py" record "$@"
-        ;;
-    gradient-loss)
-        python3 "$ENGINE_DIR/language_gradients.py" loss "$@"
-        ;;
-    gradient-backward)
-        python3 "$ENGINE_DIR/language_gradients.py" backward "$@"
-        ;;
-    gradient-apply)
-        python3 "$ENGINE_DIR/language_gradients.py" apply
-        ;;
-    gradient-trajectory)
-        python3 "$ENGINE_DIR/language_gradients.py" trajectory
-        ;;
-    gradient-show)
-        python3 "$ENGINE_DIR/language_gradients.py" gradients
-        ;;
-    gradient-clear)
-        python3 "$ENGINE_DIR/language_gradients.py" clear
-        ;;
-    gradient-history)
-        python3 "$ENGINE_DIR/language_gradients.py" history
-        ;;
-
-    # --- Prompt Breeding (EvoPrompt) ---
-    breed-init)
-        python3 "$ENGINE_DIR/prompt_breeding.py" init "$@"
-        ;;
-    breed)
-        python3 "$ENGINE_DIR/prompt_breeding.py" breed "$@"
-        ;;
-    breed-score)
-        python3 "$ENGINE_DIR/prompt_breeding.py" score "$@"
-        ;;
-    breed-best)
-        python3 "$ENGINE_DIR/prompt_breeding.py" best "$@"
-        ;;
-    breed-population)
-        python3 "$ENGINE_DIR/prompt_breeding.py" population "$@"
-        ;;
-    breed-crossover)
-        python3 "$ENGINE_DIR/prompt_breeding.py" crossover "$@"
-        ;;
-    breed-mutate)
-        python3 "$ENGINE_DIR/prompt_breeding.py" mutate "$@"
-        ;;
-    breed-evolve-mutator)
-        python3 "$ENGINE_DIR/prompt_breeding.py" evolve-mutator
-        ;;
-    breed-status)
-        python3 "$ENGINE_DIR/prompt_breeding.py" status
-        ;;
-
-    # --- Meta Optimizer (Three-Optimizer Design) ---
-    meta-optimize-prompt)
-        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-prompt "$@"
-        ;;
-    meta-optimize-tools)
-        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-tools "$@"
-        ;;
-    meta-optimize-topology)
-        python3 "$ENGINE_DIR/meta_optimizer.py" optimize-topology "$@"
-        ;;
-    meta-loop)
-        python3 "$ENGINE_DIR/meta_optimizer.py" meta-loop "$@"
-        ;;
-    meta-threshold)
-        python3 "$ENGINE_DIR/meta_optimizer.py" threshold-check "$@"
-        ;;
-    meta-status)
-        python3 "$ENGINE_DIR/meta_optimizer.py" status
-        ;;
-    meta-history)
-        python3 "$ENGINE_DIR/meta_optimizer.py" history
-        ;;
-
-    # --- Workflow Evolution (DAG Pipeline + AFlow + SEW) ---
-    workflow-init)
-        python3 "$ENGINE_DIR/workflow_evolution.py" init "$@"
-        ;;
-    workflow-add-node)
-        python3 "$ENGINE_DIR/workflow_evolution.py" add-node "$@"
-        ;;
-    workflow-remove-node)
-        python3 "$ENGINE_DIR/workflow_evolution.py" remove-node "$@"
-        ;;
-    workflow-add-edge)
-        python3 "$ENGINE_DIR/workflow_evolution.py" add-edge "$@"
-        ;;
-    workflow-remove-edge)
-        python3 "$ENGINE_DIR/workflow_evolution.py" remove-edge "$@"
-        ;;
-    workflow-score-node)
-        python3 "$ENGINE_DIR/workflow_evolution.py" score-node "$@"
-        ;;
-    workflow-optimize)
-        python3 "$ENGINE_DIR/workflow_evolution.py" optimize
-        ;;
-    workflow-aflow)
-        python3 "$ENGINE_DIR/workflow_evolution.py" aflow "$@"
-        ;;
-    workflow-topology)
-        python3 "$ENGINE_DIR/workflow_evolution.py" topology
-        ;;
-    workflow-validate)
-        python3 "$ENGINE_DIR/workflow_evolution.py" validate
-        ;;
-    workflow-order)
-        python3 "$ENGINE_DIR/workflow_evolution.py" execution-order
-        ;;
-    workflow-parallel)
-        python3 "$ENGINE_DIR/workflow_evolution.py" parallel-groups
-        ;;
-    workflow-history)
-        python3 "$ENGINE_DIR/workflow_evolution.py" history
-        ;;
-
-    # --- Multi Grader (N-Dimensional Scoring) ---
-    grade)
-        python3 "$ENGINE_DIR/multi_grader.py" grade "$@"
-        ;;
-    grade-add)
-        python3 "$ENGINE_DIR/multi_grader.py" add-grader "$@"
-        ;;
-    grade-remove)
-        python3 "$ENGINE_DIR/multi_grader.py" remove-grader "$@"
-        ;;
-    grade-list)
-        python3 "$ENGINE_DIR/multi_grader.py" list-graders
-        ;;
-    grade-aggregate)
-        python3 "$ENGINE_DIR/multi_grader.py" aggregate "$@"
-        ;;
-    grade-calibrate)
-        python3 "$ENGINE_DIR/multi_grader.py" calibrate "$@"
-        ;;
-    grade-history)
-        python3 "$ENGINE_DIR/multi_grader.py" history
-        ;;
-
-    # --- Error Signatures (Pattern Database) ---
-    error-extract)
-        python3 "$ENGINE_DIR/error_signatures.py" extract "$@"
-        ;;
-    error-match)
-        python3 "$ENGINE_DIR/error_signatures.py" match "$@"
-        ;;
-    error-resolve)
-        python3 "$ENGINE_DIR/error_signatures.py" resolve "$@"
-        ;;
-    error-list)
-        python3 "$ENGINE_DIR/error_signatures.py" list "$@"
-        ;;
-    error-stats)
-        python3 "$ENGINE_DIR/error_signatures.py" stats
-        ;;
-    error-prune)
-        python3 "$ENGINE_DIR/error_signatures.py" prune "$@"
-        ;;
-
-    # --- Closed Loop (Validation + Adversarial Critique) ---
-    validate)
-        python3 "$ENGINE_DIR/closed_loop.py" validate "$@"
-        ;;
-    critique)
-        python3 "$ENGINE_DIR/closed_loop.py" critique "$@"
-        ;;
-    heal)
-        python3 "$ENGINE_DIR/closed_loop.py" heal "$@"
-        ;;
-    pipeline-check)
-        python3 "$ENGINE_DIR/closed_loop.py" pipeline-check "$@"
-        ;;
-    loop-configure)
-        python3 "$ENGINE_DIR/closed_loop.py" configure "$@"
-        ;;
-    loop-status)
-        python3 "$ENGINE_DIR/closed_loop.py" status
-        ;;
-    loop-history)
-        python3 "$ENGINE_DIR/closed_loop.py" history
-        ;;
-
-    # --- Deploy Threshold ---
-    deploy-threshold)
-        python3 "$ENGINE_DIR/state.py" deploy-threshold "$@"
-        ;;
-
-    # --- Trading: State Management ---
-    trading-init)
-        python3 "$ENGINE_DIR/state.py" trading-init "$@"
-        ;;
-    trading-record)
-        python3 "$ENGINE_DIR/state.py" trading-record "$@"
-        ;;
-
-    # --- Trading: Kelly Criterion Position Sizing ---
-    kelly-size)
-        python3 "$ENGINE_DIR/kelly.py" size "$@"
-        ;;
-    kelly-multi)
-        python3 "$ENGINE_DIR/kelly.py" multi "$@"
-        ;;
-    kelly-simulate)
-        python3 "$ENGINE_DIR/kelly.py" simulate "$@"
-        ;;
-    kelly-portfolio)
-        python3 "$ENGINE_DIR/kelly.py" portfolio "$@"
-        ;;
-
-    # --- Trading: Risk Management Circuit Breakers ---
-    risk-check)
-        python3 "$ENGINE_DIR/risk.py" check "$@"
-        ;;
-    risk-drawdown)
-        python3 "$ENGINE_DIR/risk.py" drawdown "$@"
-        ;;
-    risk-can-trade)
-        python3 "$ENGINE_DIR/risk.py" can-trade "$@"
-        ;;
-    risk-status)
-        python3 "$ENGINE_DIR/risk.py" status "$@"
-        ;;
-    risk-reset-daily)
-        python3 "$ENGINE_DIR/risk.py" reset-daily
-        ;;
-    risk-record)
-        python3 "$ENGINE_DIR/risk.py" record "$@"
-        ;;
-
-    # --- Trading: Smart Money Tracker ---
-    wallet-add)
-        python3 "$ENGINE_DIR/smart_money.py" add-wallet "$@"
-        ;;
-    wallet-profile)
-        python3 "$ENGINE_DIR/smart_money.py" profile "$@"
-        ;;
-    wallet-signals)
-        python3 "$ENGINE_DIR/smart_money.py" signals "$@"
-        ;;
-    wallet-enrich)
-        python3 "$ENGINE_DIR/smart_money.py" enrich "$@"
-        ;;
-    wallet-status)
-        python3 "$ENGINE_DIR/smart_money.py" status
-        ;;
-
-    # --- Trading: Weather Edge Calculator ---
-    weather-edge)
-        python3 "$ENGINE_DIR/weather_edge.py" edge "$@"
-        ;;
-    weather-scan)
-        python3 "$ENGINE_DIR/weather_edge.py" scan "$@"
-        ;;
-    weather-forecast)
-        python3 "$ENGINE_DIR/weather_edge.py" forecast "$@"
-        ;;
-
-    # --- Trading: Open-Meteo Forecast Fetcher ---
-    weather-fetch)
-        python3 "$ENGINE_DIR/weather_fetcher.py" fetch "$@"
-        ;;
-    weather-fetch-range)
-        python3 "$ENGINE_DIR/weather_fetcher.py" fetch-range "$@"
-        ;;
-    weather-evaluate)
-        python3 "$ENGINE_DIR/weather_fetcher.py" evaluate "$@"
-        ;;
-    weather-cache-clear)
-        python3 "$ENGINE_DIR/weather_fetcher.py" clear-cache "$@"
-        ;;
-
-    # --- Trading: Wallet Activity Poller ---
-    wallet-poll)
-        python3 "$ENGINE_DIR/wallet_poller.py" poll "$@"
-        ;;
-    wallet-poll-all)
-        python3 "$ENGINE_DIR/wallet_poller.py" poll-all "$@"
-        ;;
-    wallet-profile-live)
-        python3 "$ENGINE_DIR/wallet_poller.py" profile "$@"
-        ;;
-    wallet-discover)
-        python3 "$ENGINE_DIR/wallet_poller.py" discover "$@"
-        ;;
-    wallet-poller-status)
-        python3 "$ENGINE_DIR/wallet_poller.py" status
-        ;;
-
-    # --- Trading: Sports Edge Calculator ---
-    sports-elo)
-        python3 "$ENGINE_DIR/sports_edge.py" elo "$@"
-        ;;
-    sports-devig)
-        python3 "$ENGINE_DIR/sports_edge.py" devig "$@"
-        ;;
-    sports-edge)
-        python3 "$ENGINE_DIR/sports_edge.py" edge "$@"
-        ;;
-    sports-evaluate)
-        python3 "$ENGINE_DIR/sports_edge.py" evaluate "$@"
-        ;;
-    sports-multi)
-        python3 "$ENGINE_DIR/sports_edge.py" multi-source "$@"
-        ;;
-
-    # --- Trading: Sports Data Fetcher (ESPN + Odds API) ---
-    sports-espn)
-        python3 "$ENGINE_DIR/sports_fetcher.py" espn "$@"
-        ;;
-    sports-odds)
-        python3 "$ENGINE_DIR/sports_fetcher.py" odds "$@"
-        ;;
-    sports-fetch-evaluate)
-        python3 "$ENGINE_DIR/sports_fetcher.py" evaluate "$@"
-        ;;
-    sports-list)
-        python3 "$ENGINE_DIR/sports_fetcher.py" list-sports
-        ;;
-    sports-cache-clear)
-        python3 "$ENGINE_DIR/sports_fetcher.py" clear-cache "$@"
-        ;;
-
-    # --- Trading: Politics & Economics Edge ---
-    politics-polls)
-        python3 "$ENGINE_DIR/politics_edge.py" aggregate-polls "$@"
-        ;;
-    politics-evaluate)
-        python3 "$ENGINE_DIR/politics_edge.py" evaluate "$@"
-        ;;
-    politics-arb)
-        python3 "$ENGINE_DIR/politics_edge.py" structural-arb "$@"
-        ;;
-    politics-stale)
-        python3 "$ENGINE_DIR/politics_edge.py" stale-check "$@"
-        ;;
-
-    # --- Trading: Position Management (phantom position killer) ---
-    pos-open)
-        python3 "$ENGINE_DIR/positions.py" open "$@"
-        ;;
-    pos-confirm)
-        python3 "$ENGINE_DIR/positions.py" confirm "$@"
-        ;;
-    pos-fail)
-        python3 "$ENGINE_DIR/positions.py" fail "$@"
-        ;;
-    pos-close)
-        python3 "$ENGINE_DIR/positions.py" close "$@"
-        ;;
-    pos-list)
-        python3 "$ENGINE_DIR/positions.py" list "$@"
-        ;;
-    pos-reconcile)
-        python3 "$ENGINE_DIR/positions.py" reconcile "$@"
-        ;;
-    pos-expire)
-        python3 "$ENGINE_DIR/positions.py" expire-stale "$@"
-        ;;
-    pos-status)
-        python3 "$ENGINE_DIR/positions.py" status
-        ;;
-
-    # --- Trading: Full Pipeline (weather → enrich → kelly → risk gate) ---
-    trade-evaluate)
-        python3 "$ENGINE_DIR/trade_pipeline.py" evaluate "$@"
-        ;;
-    trade-execute)
-        python3 "$ENGINE_DIR/trade_pipeline.py" execute "$@"
-        ;;
-    trade-status)
-        python3 "$ENGINE_DIR/trade_pipeline.py" status
-        ;;
-    trade-history)
-        python3 "$ENGINE_DIR/trade_pipeline.py" history "$@"
-        ;;
 
     # --- Harness (Outer Loop) ---
     harness)
         python3 "$ENGINE_DIR/harness.py" "$@"
         ;;
 
-    # --- Benchmark Engine ---
-    benchmark)
-        python3 "$ENGINE_DIR/benchmark.py" "$@"
-        ;;
-    bench)
-        python3 "$ENGINE_DIR/benchmark.py" "$@"
+    # --- Strategy Testing ---
+    test-strategies)
+        python3 "$ENGINE_DIR/../evolution/.state/test_strategies.py" "$@"
         ;;
 
     # --- Help ---
@@ -749,9 +337,9 @@ case "$CMD" in
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
         echo ""
         echo "Guided:      next              (engine tells you exactly what to do)"
-        echo "State:       init [--type business] | status | select | cycle | add-strategy | extinct | mutate"
+        echo "State:       init | status | select | cycle | add-strategy | extinct | mutate"
         echo "             crossover | cull | resurrect | crystallize | reset | export | import"
-        echo "Fitness:     fitness [--manual <score> \"description\"]"
+        echo "Fitness:     fitness"
         echo "Checkpoints: checkpoint | revert | checkpoints | diff"
         echo "Analysis:    analyze | patterns | blind-spots | velocity | diversity"
         echo "             recommend | plateau | correlations"
@@ -772,46 +360,8 @@ case "$CMD" in
         echo "             outcome-retro | outcome-lessons"
         echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
         echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
-        echo "             gradient-mutate | breed-express"
-        echo "Gradients:   gradient-record | gradient-loss | gradient-backward | gradient-apply"
-        echo "             gradient-trajectory | gradient-show | gradient-clear | gradient-history"
-        echo "Breeding:    breed-init | breed | breed-score | breed-best | breed-population"
-        echo "             breed-crossover | breed-mutate | breed-evolve-mutator | breed-status"
-        echo "Meta-Opt:    meta-optimize-prompt | meta-optimize-tools | meta-optimize-topology"
-        echo "             meta-loop | meta-threshold | meta-status | meta-history"
-        echo "Workflow:    workflow-init | workflow-add-node | workflow-remove-node"
-        echo "             workflow-add-edge | workflow-remove-edge | workflow-score-node"
-        echo "             workflow-optimize | workflow-aflow | workflow-topology"
-        echo "             workflow-validate | workflow-order | workflow-parallel | workflow-history"
-        echo "Grading:     grade | grade-add | grade-remove | grade-list"
-        echo "             grade-aggregate | grade-calibrate | grade-history"
-        echo "Errors:      error-extract | error-match | error-resolve"
-        echo "             error-list | error-stats | error-prune"
-        echo "Closed-Loop: validate | critique | heal | pipeline-check"
-        echo "             loop-configure | loop-status | loop-history"
-        echo "Deploy:      deploy-threshold [value]"
-        echo "Trading:     kelly-size | kelly-multi | kelly-simulate | kelly-portfolio"
-        echo "Positions:   pos-open | pos-confirm | pos-fail | pos-close | pos-list"
-        echo "             pos-reconcile | pos-expire | pos-status"
-        echo "Risk:        risk-check | risk-drawdown | risk-can-trade | risk-status"
-        echo "             risk-reset-daily | risk-record"
-        echo "Wallets:     wallet-add | wallet-profile | wallet-signals | wallet-enrich"
-        echo "             wallet-status | wallet-poll | wallet-poll-all"
-        echo "             wallet-profile-live | wallet-discover | wallet-poller-status"
-        echo "Sports:      sports-elo | sports-devig | sports-edge | sports-evaluate"
-        echo "             sports-multi | sports-espn | sports-odds"
-        echo "             sports-fetch-evaluate | sports-list | sports-cache-clear"
-        echo "Politics:    politics-polls | politics-evaluate | politics-arb"
-        echo "             politics-stale"
-        echo "Weather:     weather-edge | weather-scan | weather-forecast"
-        echo "             weather-fetch | weather-fetch-range | weather-evaluate"
-        echo "             weather-cache-clear"
-        echo "Pipeline:    trade-evaluate | trade-execute | trade-status | trade-history"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
-        echo "             harness --autopilot --goal \"X\" --endpoint http://localhost:11434/v1"
-        echo "Benchmark:   benchmark define <name> <desc> <criteria> | benchmark list | benchmark run <name>"
-        echo "             benchmark record <name> <mode> <cycles> <fitness> <data> | benchmark compare <name>"
-        echo "             benchmark report | benchmark evidence | benchmark autonomy"
+        echo "Test-Strategies: test-strategies --cycle N --strategy S002|S003"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2
