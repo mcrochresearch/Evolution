@@ -327,6 +327,11 @@ case "$CMD" in
         python3 "$ENGINE_DIR/harness.py" "$@"
         ;;
 
+    # --- Strategy Testing ---
+    test-strategies)
+        python3 "$ENGINE_DIR/../evolution/.state/test_strategies.py" "$@"
+        ;;
+
     # --- Help ---
     help|--help|-h)
         echo "Evolution Engine — Autonomous Goal-Directed AI Evolution"
@@ -356,6 +361,7 @@ case "$CMD" in
         echo "Enforce:     enforce | enforce-patterns | enforce-history | enforce-test"
         echo "DNA:         mutate-dna | express-dna | dna-fitness | dna-status | dna-revert"
         echo "Harness:     harness --goal \"X\" --provider openai --model gpt-4o"
+        echo "Test-Strategies: test-strategies --cycle N --strategy S002|S003"
         ;;
     *)
         echo "{\"error\":\"Unknown command: $CMD. Run './engine/evolve help' for usage.\"}" >&2

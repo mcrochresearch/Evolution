@@ -156,6 +156,28 @@
       "delta": -0.006999999999999999,
       "kept": true,
       "timestamp": "2026-03-23T19:33:05.279166Z"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S002",
+      "action": "Tested Content-Authority: 0.045 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.045,
+      "delta": 0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-25T09:06:21.450556Z"
+    },
+    {
+      "cycle": 1,
+      "strategy": "S003",
+      "action": "Tested Referral-Engine: 0.038 success rate",
+      "tests_passing": 2,
+      "tests_total": 3,
+      "fitness": 0.038,
+      "delta": -0.006999999999999999,
+      "kept": true,
+      "timestamp": "2026-03-25T09:06:23.117582Z"
     }
   ],
   "principles": [],
@@ -207,6 +229,22 @@
       "fitness": 0.038,
       "surprise": false,
       "timestamp": "2026-03-23T19:33:05.279824Z"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Content-Authority",
+      "outcome": "KEPT",
+      "fitness": 0.045,
+      "surprise": false,
+      "timestamp": "2026-03-25T09:06:21.451254Z"
+    },
+    {
+      "cycle": 1,
+      "action": "Tested Referral-Engine",
+      "outcome": "KEPT",
+      "fitness": 0.038,
+      "surprise": false,
+      "timestamp": "2026-03-25T09:06:23.118182Z"
     }
   ],
   "sub_goals": [],
