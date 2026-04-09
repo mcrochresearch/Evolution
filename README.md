@@ -2,7 +2,7 @@
 
 **Set a goal. Walk away. Your AI thinks, learns, adapts, and evolves — relentlessly — until the goal is achieved.**
 
-Evolution is an autonomous goal-directed skill framework for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [OpenClaw](https://github.com/openclaw/openclaw). It transforms your AI agent from a tool that waits for instructions into an evolving intelligence that pursues objectives independently.
+Evolution is an autonomous goal-directed skill framework for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and compatible AI agent platforms. It transforms your AI agent from a tool that waits for instructions into an evolving intelligence that pursues objectives independently.
 
 > *"The problem is simple — I don't want to have to direct my AI. I just want it to work relentlessly to its end goal."*
 
@@ -169,14 +169,12 @@ python3 engine/harness.py --autopilot --goal "Build X" \
 
 ## Installation
 
-### Claude Code
-
 ```bash
 # Clone into your project
 git clone https://github.com/mcrochresearch/Evolution.git
 
 # Option A: Use the Makefile
-make -C Evolution install-claude-code WORKSPACE=/path/to/your-project
+make -C Evolution install WORKSPACE=/path/to/your-project
 
 # Option B: Manual copy
 cp -r Evolution/.claude/skills/ your-project/.claude/skills/
@@ -189,29 +187,6 @@ Then in Claude Code:
 ```
 /evolution Build a real-time chat system with WebSocket support and message persistence
 ```
-
-### OpenClaw
-
-```bash
-# Clone the repo
-git clone https://github.com/mcrochresearch/Evolution.git
-
-# Option A: Use the Makefile (recommended)
-make -C Evolution install-openclaw WORKSPACE=~/.openclaw/workspace
-
-# Option B: Manual copy
-cp -r Evolution/engine/ your-workspace/engine/
-cp -r Evolution/evolution/ your-workspace/evolution/
-cp Evolution/openclaw/SOUL-REFERENCE.md your-workspace/SOUL.md  # or integrate into existing SOUL.md
-cp Evolution/openclaw/ONBOARDING.md your-workspace/
-cp Evolution/openclaw/AGENTS.md your-workspace/
-cp Evolution/openclaw/MEMORY.md your-workspace/
-cp Evolution/openclaw/TOOLS.md your-workspace/
-cp Evolution/openclaw/OPENCLAW-SETUP.md your-workspace/
-chmod +x your-workspace/engine/evolve your-workspace/engine/*.sh
-```
-
-**Important:** If you already have a `SOUL.md`, do NOT replace it — integrate the relevant sections from `SOUL-REFERENCE.md` into your existing file. See `OPENCLAW-SETUP.md` for agent registration and bootstrap character limit guidance.
 
 **Requires:** Python 3.7+ (the engine checks on startup and provides a clear error if missing).
 
@@ -317,7 +292,7 @@ Evolution is open source. We welcome contributions that make the framework more 
 
 - New fitness dimensions for specific domains
 - Better mutation operators for strategy evolution
-- Integration with additional AI platforms beyond Claude Code and OpenClaw
+- Integration with additional AI agent platforms
 - Empirical studies of Evolution's performance on real-world tasks
 
 ---
@@ -328,4 +303,4 @@ MIT
 
 ---
 
-*Built by studying the giants: Karpathy's autoresearch, MiroFish's swarm intelligence, Voyager's skill libraries, Claudeception's autonomous learning, OpenClaw's workspace system, Anthropic's official skill patterns, the Self-Evolving Agent's PDCA loops, ARIS's cross-model review, and 40 years of AI/ML research — from Holland's genetic algorithms to Shinn's Reflexion. Evolution stands on all their shoulders and reaches higher.*
+*Built by studying the giants: Karpathy's autoresearch, MiroFish's swarm intelligence, Voyager's skill libraries, Claudeception's autonomous learning, Anthropic's official skill patterns, the Self-Evolving Agent's PDCA loops, ARIS's cross-model review, and 40 years of AI/ML research — from Holland's genetic algorithms to Shinn's Reflexion. Evolution stands on all their shoulders and reaches higher.*

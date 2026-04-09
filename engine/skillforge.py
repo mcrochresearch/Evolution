@@ -8,7 +8,7 @@ Inspired by:
 - Pattern Graduation — memory -> recurs 2-3x -> permanent skill
 
 When Evolution discovers a reusable solution, SkillForge packages it as a
-proper Claude Code / OpenClaw skill that auto-loads in future sessions.
+proper skill that auto-loads in future sessions.
 
 Features:
 - Atomic file writes (write-to-temp-then-rename)

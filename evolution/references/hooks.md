@@ -1,7 +1,7 @@
 # Evolution Hooks — Enforcement Layer
 
 > Hooks enforce Evolution's rules mechanically. Install these in your
-> Claude Code settings or OpenClaw configuration.
+> Claude Code settings or agent platform configuration.
 
 ## Recommended Hooks
 
@@ -73,4 +73,4 @@ Add to `.claude/settings.json` in your project:
 }
 ```
 
-Or for OpenClaw, add to your agent's configuration file.
+Or add to your agent platform's equivalent configuration file.
